@@ -42,7 +42,7 @@ This runs a small simulated plant: a tank, valves, a pump, a heater and a room s
 
 ## Port already in use?
 
-`EADDRINUSE ... :8080` (or `:1883`) means another program has that port. Find it:
+*Port 8080 is already in use* (or `:1883`) means another program has that port. Often that's riotdash itself, already running in another terminal or as the service (`systemctl status riotdash`). Find it:
 
 ```bash
 sudo ss -ltnp | grep -E ':8080|:1883'
@@ -112,16 +112,27 @@ Use **Add to Home Screen** (Safari share menu, or the Chrome menu on Android) to
 
 ## Run it as a service (starts on boot)
 
+From your riotdash folder:
+
 ```bash
-sudo ./deploy/install.sh                 # add --with-simulator for the demo plant
+bash deploy/install-service.sh
 ```
+
+This turns the folder you're in into a system service called **riotdash**. It:
+- runs as your user, from the same folder, so your `config.json`, logins, dashboards and history stay put
+- starts at boot and restarts if it ever crashes
+- keeps in-app updates working
+- stops any copy you'd started by hand in a terminal, then checks the service answers
 
 | | |
 |---|---|
-| App | `/opt/mqtt-dash` (owned by the `mqttdash` user so in-app updates work) |
-| Config | `/etc/mqtt-dash/config.json` (created once, never overwritten) |
-| Data | `/var/lib/mqtt-dash` |
-| Logs | `journalctl -u mqtt-dash -f` |
-| Restart | `sudo systemctl restart mqtt-dash` |
+| Live log | `journalctl -u riotdash -f` |
+| Restart | `sudo systemctl restart riotdash` |
+| Stop / start | `sudo systemctl stop riotdash` / `sudo systemctl start riotdash` |
+| Remove the service | `bash deploy/install-service.sh --uninstall` (your files are kept) |
 
-Running the installer again from a newer version is safe.
+If you also use the Cloudflare tunnel, `cloudflared` is a service too, so after a reboot both come back by themselves.
+
+### Alternative: system-wide install in /opt
+
+`sudo ./deploy/install.sh` copies the app to `/opt/mqtt-dash` with a dedicated `mqttdash` user, config in `/etc/mqtt-dash/config.json` and data in `/var/lib/mqtt-dash`. It starts with a **fresh** config and data folder, so use it for new machines rather than to convert an existing install.
