@@ -1,0 +1,14 @@
+[Unit]
+Description=MQTT Dash demo plant simulator
+After=mqtt-dash.service
+Requires=mqtt-dash.service
+
+[Service]
+Type=simple
+User=mqttdash
+ExecStart=/usr/bin/env node /opt/mqtt-dash/tools/simulator.js --host 127.0.0.1 --port 1883
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
