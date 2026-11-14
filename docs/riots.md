@@ -117,7 +117,7 @@ The **⚙ Settings** button at the bottom of the Plunger lift panel opens the op
 2. **In riotdash:** `riot.allowWrites` in `config.json` (default `true`). Set it to `false` to make riotdash read-only for controllers.
 3. **Who:** anyone on your network, and, through Cloudflare, only logged-in users. Each write is logged with the user name (or `local <ip>`) in `data/riot-writes.jsonl`.
 
-Other MQTT clients can't publish `riot/+/opt/set` (or `opt/run2/set`) themselves: all writes go through riotdash, so they're checked and logged. To let another tool write, enable MQTT auth and give its user a `publish` ACL that names the topic (for example `"publish": ["riot/FED0/opt/set"]`). Set `riot.protectSetTopics` to `false` to turn this protection off.
+Other MQTT clients can't publish `riot/+/opt/set` (or `opt/run2/set`) themselves: all writes go through riotdash, so they're checked and logged. To let another tool write, give its user a `publish` ACL that names the topic (for example `"publish": ["riot/+/opt/set"]`; a plain `#` doesn't count) and have the tool log in with it. On your network that needs MQTT auth on (`auth.enabled`); through Cloudflare the login is always checked. Set `riot.protectSetTopics` to `false` to turn this protection off.
 
 | Direction | Topic | Payload |
 |---|---|---|
