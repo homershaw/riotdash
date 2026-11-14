@@ -86,6 +86,7 @@ All under the controller's base topic `riot/<id>` (`<id>`: 1–32 letters, digit
 | `opt7/<run>` | yes | OPT 7.02 status: the same JSON as the controller's `/api/optimization?run=n`, plus `run` and `epoch`. Sent every interval and on a cycle, valve, error or plunger-trip change. |
 | `opt/meta/SPTn` | yes | `{"program":"5.00","points":{"SPTn.p":{"name":"…","units":"…","rw":1}}}` |
 | `opt/SPTn` | no | `{"v":{"SPTn.p":value,…}}` |
+| `opt/run2/SPTn`, `opt/run2/meta/SPTn` | as above | A second optimizer run. riotdash shows it as `opt7/2`, with its own panels. |
 
 `info` (schema 1) needs at least `"type":"INFO"`, `model` and `tags`. riotdash also uses `product`, `firmware`, `clientId` (the MAC is read from its last 12 hex digits, or from an explicit `"mac"`), `ip`, `site.name`, `site.location`, `telemetry.intervalSec`, `io` and, per Tag, `name`, `label`, `units`, `type` (`analog`/`digital`), `source`, `writable`, `telemetry` and `range`.
 
@@ -101,13 +102,28 @@ Decoded values are republished, retained, so widgets, trends and the Explorer ca
 | `riot/<id>/meta/lastData` | time of the last telemetry |
 | `riot/<id>/opt7/<run>/casing`, `tubing`, `line`, `flow`, `valve` | optimizer values (valve 1/0), kept with history for the trend |
 
-## Writing from the dashboard (proposal, not yet implemented)
+## Changing optimizer settings
 
-The controller currently subscribes to nothing, so outputs are shown read-only. A suggested command contract for the firmware:
+The **⚙ Settings** button at the bottom of the Plunger lift panel opens the optimizer's settings for that well and run:
+
+- **Start / stop** the optimizer program (SPT0.6), with its own confirmation.
+- Every **R/W soft point** the program uses, grouped as *Main setup* (SPT0), *Setpoints* (SPT1) and *Tuning limits* (SPT2), with its current value. Mode selection, start position, critical-flow override and pre-flow are drop-downs. Names and units come from the controller's `opt/meta`, so Mode 8 shows its PPST names.
+- Change any number of values, then **Apply**. riotdash shows old → new and asks for confirmation, sends the change, and waits for the controller's reply: *Applied by the controller*, or the controller's reason for refusing it (out of range, cross-check, read-only…). A message is applied all or nothing.
+- **Recent changes** lists who changed what, from → to, and the result.
+
+### What has to be allowed
+
+1. **At the controller:** writes from MQTT are off by default and can only be turned on from the controller's own MQTT page (optionally with a Local/Remote permissive Tag). While they are off the controller doesn't listen, so riotdash gets no reply and says *No reply from the controller. Writes from MQTT are probably turned off on it*.
+2. **In riotdash:** `riot.allowWrites` in `config.json` (default `true`). Set it to `false` to make riotdash read-only for controllers.
+3. **Who:** anyone on your network, and, through Cloudflare, only logged-in users. Each write is logged with the user name (or `local <ip>`) in `data/riot-writes.jsonl`.
+
+Other MQTT clients can't publish `riot/+/opt/set` (or `opt/run2/set`) themselves: all writes go through riotdash, so they're checked and logged. To let another tool write, enable MQTT auth and give its user a `publish` ACL that names the topic (for example `"publish": ["riot/FED0/opt/set"]`). Set `riot.protectSetTopics` to `false` to turn this protection off.
 
 | Direction | Topic | Payload |
 |---|---|---|
-| riotdash → controller | `riot/<id>/cmd` | `{"id":"<unique>","tag":"M31.DO1","value":1}` |
-| controller → riotdash | `riot/<id>/cmd/ack` | `{"id":"<same>","ok":true}` or `{"id":"…","ok":false,"error":"not writable"}` |
+| riotdash → controller | `riot/<id>/opt/set` (`opt/run2/set` for run 2) | `{"id":"rd-1a2b3c4d","SPT1.9":45,"SPT1.11":30}` |
+| controller → riotdash | `riot/<id>/opt/ack` (`opt/run2/ack`) | `{"id":"rd-1a2b3c4d","ok":true,"run":1,"written":{…},"error":""}` |
 
-The controller would accept only Tags it lists as `writable` and range-check them. The new value then shows up in the next telemetry. riotdash would then show sliders and switches (with confirmation) instead of read-only bars and lamps.
+After an accepted write the controller re-sends its soft points (`"trigger":"write"`), and the panel updates.
+
+Outputs and other Tags are still shown read-only.

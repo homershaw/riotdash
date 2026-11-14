@@ -13,7 +13,7 @@ const C = require('../server/codec');
 
 const HTTP = 18080 + Math.floor(Math.random() * 500), MQTT = 11883 + Math.floor(Math.random() * 500);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mqttdash-'));
-fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ http: { port: HTTP, host: '127.0.0.1' }, mqtt: { port: MQTT, host: '127.0.0.1' }, dataDir: './data' }));
+fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ http: { port: HTTP, host: '127.0.0.1' }, mqtt: { port: MQTT, host: '127.0.0.1' }, dataDir: './data', riot: { writeTimeoutMs: 1500 } }));
 const srv = spawn(process.execPath, [path.join(__dirname, '../server/index.js')], { env: { ...process.env, MQTTDASH_CONFIG: path.join(dir, 'config.json') }, stdio: ['ignore', 'pipe', 'inherit'] });
 
 let failures = 0;
@@ -177,6 +177,44 @@ function wsMqtt(headers, username, password) {
   const st2 = JSON.parse(((await (await get('/api/topics')).json()).find((t) => t.topic === 'riot/AB13/opt7/1') || { payload: '{}' }).payload);
   ok(st2.running && st2.esd && st2.valveKnown === false && st2.pv.criticalFlow === 20 && st2.pv.criticalFlowManual && st2.programVersion === '7.02.00' && st2.timers.timeOff === 10,
     'matches the controller page: running, ESD not used, valve unknown (M31 offline), manual critical flow 20, OPT 7.02.00');
+  // A second optimizer run: opt/run2/SPTn → opt7/2, separate from run 1
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/opt/run2/SPT5', payload: JSON.stringify({ ts: 1794643900, v: { 'SPT5.12': 900, 'SPT5.13': 700, 'SPT5.14': 650, 'SPT5.16': 1 } }) }));
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/opt/run2/SPT1', payload: JSON.stringify({ ts: 1794643900, v: { 'SPT1.1': 1, 'SPT1.9': 30 } }) }));
+  await sleep(900);
+  const tl3 = await (await get('/api/topics')).json();
+  const r2 = JSON.parse((tl3.find((t) => t.topic === 'riot/AB13/opt7/2') || { payload: '{}' }).payload);
+  const r1 = JSON.parse((tl3.find((t) => t.topic === 'riot/AB13/opt7/1') || { payload: '{}' }).payload);
+  ok(r2.run === 2 && r2.pv && r2.pv.casing === 900 && r2.valveOpen && r2.valveKnown && r1.pv.casing === 1250 && tl3.some((t) => t.topic === 'riot/AB13/opt/run2/v/SPT5.12'),
+    'optimizer run 2 (opt/run2/SPTn) becomes opt7/2 without touching run 1');
+  // Writing soft points: riotdash → opt/set, controller → opt/ack
+  await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB13/approve`, { method: 'POST', body: JSON.stringify({ name: 'Well 13' }) });
+  const post = (b) => fetch(`http://127.0.0.1:${HTTP}/api/riots/AB13/opt/set`, { method: 'POST', body: JSON.stringify(b) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+  const w0 = await post({ run: 1, values: { 'SPT1.11': 12 } });
+  ok(w0.ok === false && w0.timeout, 'write with nobody listening (writes off at the controller) times out with an explanation');
+  const ro = await post({ run: 1, values: { 'SPT3.1': 0 } });
+  ok(ro.status === 400 && /read-only/.test(ro.error), 'read-only point refused before sending');
+  const ctl = await tcpClient('ctl-ab13');
+  ctl.s.write(C.encodeSubscribe(7, [['riot/AB13/opt/set', 0]]));
+  ctl.s.on('data', () => setTimeout(() => {
+    for (const m of ctl.msgs.splice(0)) {
+      const j = JSON.parse(m.payload.toString()); const { id: wid, ...vals } = j;
+      const bad = vals['SPT1.18'] !== undefined && vals['SPT1.18'] >= 99;
+      ctl.s.write(C.encodePublish({ topic: 'riot/AB13/opt/ack', payload: JSON.stringify({ id: wid, ok: !bad, run: 1, written: bad ? {} : vals, error: bad ? 'Early arrival time must be less than late arrival time' : '' }) }));
+    }
+  }, 20));
+  await sleep(200);
+  const w1 = await post({ run: 1, values: { 'SPT1.11': 12 } });
+  const w2 = await post({ run: 1, values: { 'SPT1.18': 99 } });
+  ok(w1.ok === true && w2.ok === false && /Early arrival/.test(w2.error), 'controller ack: accepted write ok, rejected write returns its reason');
+  const log = await (await get('/api/riots/AB13/writes')).json();
+  ok(log.length === 3 && log[0].error && log[2].timeout && log[1].ok && log[1].by.startsWith('local') && log[1].values['SPT1.11'] === 12, 'writes are logged with who, values and result');
+  // Other MQTT clients may not publish opt/set directly
+  const spy = await tcpClient('spy'); spy.s.write(C.encodeSubscribe(8, [['riot/AB13/opt/set', 0]])); await sleep(150);
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/opt/set', payload: '{"SPT0.6":0}' })); await sleep(300);
+  ok(!spy.msgs.some((m) => m.topic === 'riot/AB13/opt/set'), 'a plain MQTT client cannot publish riot/+/opt/set');
+  const viaCf = await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB13/opt?run=1`, { headers: { 'cf-connecting-ip': '203.0.113.9' } });
+  ok(viaCf.status === 401 || viaCf.status === 503 || (await viaCf.json()).writable === false, 'internet requests without a login cannot write');
+  ctl.s.destroy(); spy.s.destroy();
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);
