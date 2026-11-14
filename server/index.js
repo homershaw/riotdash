@@ -106,6 +106,8 @@ if (process.argv[2] === 'update') {
   } catch (e) { console.error('Update failed:', e.message); process.exit(1); }
 }
 
+updater.fixScriptModes(ROOT);
+
 // ---------- core ----------
 const store = new Store(dataDir, { historyPoints: config.historyPoints });
 const broker = new Broker(config);
