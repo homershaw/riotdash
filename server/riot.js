@@ -253,7 +253,8 @@ class Riots {
 
 const OPT_MODES = ['Invalid', 'Time On vs. Time Off', 'Critical Flow vs. Time Off', 'Critical Flow vs. CSD < SP', 'Critical Flow vs. CSD > SP',
   'CSD < SP vs. Time Off', 'Critical Flow vs. Casing > SP', 'Critical Flow vs. Load Factor', 'Self Optimization Plunger'];
-const PROGRAM_STATUS = { 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
+// OPT 7.02 (C port): 0 stopped, 1 running. OPT 5 port: 2 inactive, 3 running, 5 fast plunger, 6 valve conflict, 7 line high.
+const PROGRAM_STATUS = { 0: 'Stopped', 1: 'Running', 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
 // v(key) -> number|null for soft points "SPTn.p". Timers in the soft points count down (minutes remaining).
 function sptToStatus(v) {
   const mode = v('SPT0.1'), ps = v('SPT1.1'), valve = v('SPT5.16'), depth = v('SPT0.9');
@@ -264,7 +265,7 @@ function sptToStatus(v) {
     const stamp = v(`SPT4.${2 + i}`), trip = v(`SPT4.${12 + i}`);
     if (trip > 0) history.push({ trip, stamp: stamp || 0, velocity: depth > 0 ? depth / trip : null });
   }
-  const running = ps === 3;
+  const running = ps === 1 || ps === 3;
   return {
     ok: true, running, mode, modeName: OPT_MODES[mode] || OPT_MODES[0],
     programStatus: ps, banner: !running && (ps === 5 || ps === 7) ? 'SHUT IN' : undefined,
