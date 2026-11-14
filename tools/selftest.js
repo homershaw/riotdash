@@ -3,6 +3,8 @@
 // End-to-end self test: starts the server on spare ports and exercises MQTT over TCP and WebSockets.
 
 const net = require('net');
+const http = require('http');
+const crypto = require('crypto');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +42,24 @@ function tcpClient(id, opts = {}) {
       }
     });
     s.on('error', reject);
+  });
+}
+
+// MQTT over a raw WebSocket so we can add headers (e.g. pretend to come through Cloudflare)
+function wsMqtt(headers, username, password) {
+  return new Promise((resolve) => {
+    const req = http.request({ host: '127.0.0.1', port: HTTP, path: '/mqtt', headers: {
+      Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': crypto.randomBytes(16).toString('base64'), 'Sec-WebSocket-Protocol': 'mqtt', ...headers } });
+    req.on('upgrade', (res, sock) => {
+      const send = (buf) => { const mask = crypto.randomBytes(4); const d = Buffer.from(buf); for (let i = 0; i < d.length; i++) d[i] ^= mask[i & 3];
+        sock.write(Buffer.concat([Buffer.from([0x82, 0x80 | d.length]), mask, d])); };
+      send(C.encodeConnect({ clientId: 'ws-' + Math.random().toString(16).slice(2, 8), username, password }));
+      sock.on('data', (d) => { // server frames are unmasked: [0x82, len, ...payload]
+        const p = d.subarray(2); if (p[0] >> 4 === C.TYPES.CONNACK) { resolve(p[3]); sock.destroy(); } });
+      setTimeout(() => resolve(-1), 2000);
+    });
+    req.on('error', () => resolve(-2));
+    req.end();
   });
 }
 
@@ -97,6 +117,28 @@ function tcpClient(id, opts = {}) {
   ok(put.ok, 'dashboard save');
   const bad = await fetch(`http://127.0.0.1:${HTTP}/api/dashboards/..%2Fevil`, { method: 'PUT', body: '{}' });
   ok(!bad.ok, 'rejects path traversal in dashboard id');
+
+  // ---- internet access (requests through Cloudflare carry cf-connecting-ip) ----
+  const CF = { 'cf-connecting-ip': '203.0.113.9' };
+  const get = (p, headers = {}) => fetch(`http://127.0.0.1:${HTTP}${p}`, { headers });
+  ok((await get('/')).status === 200, 'local browser needs no login');
+  ok((await get('/', CF)).status === 503, 'internet access refused until a login exists');
+  ok((await get('/healthz', CF)).status === 200, 'healthz stays open for tunnel checks');
+  const add = require('child_process').spawnSync(process.execPath, [path.join(__dirname, '../server/index.js'), 'add-user', 'alice', 'correct-horse'], { env: { ...process.env, MQTTDASH_CONFIG: path.join(dir, 'config.json') }, encoding: 'utf8' });
+  ok(add.status === 0, 'add-user CLI');
+  await sleep(4500); // config.json is re-read live
+  const basic = (u, p) => ({ ...CF, authorization: 'Basic ' + Buffer.from(`${u}:${p}`).toString('base64') });
+  ok((await get('/', CF)).status === 401, 'internet access without login → 401');
+  ok((await get('/', basic('alice', 'wrong'))).status === 401, 'wrong password → 401');
+  ok((await get('/', basic('alice', 'correct-horse'))).status === 200, 'correct login → 200');
+  const sess = await (await get('/api/session', basic('alice', 'correct-horse'))).json();
+  ok(sess.username === 'alice' && /^session:/.test(sess.password), 'logged-in browser gets an MQTT session login');
+  ok((await wsMqtt({})) === 0, 'local MQTT over WS needs no login');
+  ok((await wsMqtt(CF)) === 5, 'internet MQTT without login refused');
+  ok((await wsMqtt(CF, 'alice', 'nope')) === 5, 'internet MQTT with wrong password refused');
+  ok((await wsMqtt(CF, 'alice', 'correct-horse')) === 0, 'internet MQTT with user login accepted');
+  ok((await wsMqtt(CF, 'alice', sess.password)) === 0, 'internet MQTT with browser session login accepted');
+  ok((await wsMqtt(CF, 'mallory', sess.password)) === 5, 'session login is tied to its user');
 
   srv.kill('SIGTERM');
   for (const x of [a, b, c]) x.s.destroy();

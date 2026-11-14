@@ -29,10 +29,23 @@ const conn = { url: prefs.get('url', ''), username: prefs.get('username', ''), p
 let client;
 
 // ---------------- MQTT ----------------
-function connect() {
+// When opened over the internet (logged in through the browser), the server hands out an MQTT session login.
+async function sessionLogin() {
+  if (conn.username || conn.url) return null;
+  try { const s = await (await fetch('/api/session', { cache: 'no-store' })).json(); return s.password ? s : null; } catch { return null; }
+}
+
+let sessionRetried = false;
+async function connect() {
   if (client) client.disconnect();
-  client = new MqttClient({ url: conn.url || defaultWsUrl(), username: conn.username || undefined, password: conn.password || undefined });
-  client.addEventListener('state', (e) => setConnState(e.detail.state, e.detail.info));
+  const sess = await sessionLogin();
+  client = new MqttClient({ url: conn.url || defaultWsUrl(), username: sess?.username || conn.username || undefined, password: sess?.password || conn.password || undefined });
+  client.addEventListener('state', (e) => {
+    if (e.detail.state === 'connected') sessionRetried = false;
+    // an expired session login: fetch a fresh one once
+    if (e.detail.state === 'error' && sess && !sessionRetried) { sessionRetried = true; connect(); return; }
+    setConnState(e.detail.state, e.detail.info);
+  });
   client.addEventListener('message', (e) => onMessage(e.detail.topic, e.detail.payload));
   syncSubscriptions();
   client.connect();

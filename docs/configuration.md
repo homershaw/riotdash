@@ -26,23 +26,34 @@ Restart after editing: press Ctrl+C and start it again, or `sudo systemctl resta
   },
   "dataDir": "./data",        // dashboards, history, retained messages, admin password
   "historyPoints": 2000,      // messages kept per topic for trends and the Explorer
-  "sysTopics": true           // publish $SYS/broker/... statistics
+  "sysTopics": true,          // publish $SYS/broker/... statistics
+  "updates": { "github": "homershaw/riotdash", "channel": "main" },   // see docs/updating.md
+  "remote": { "requireLogin": true }   // anything arriving through Cloudflare must log in (see docs/cloudflare.md)
 }
 ```
 
 These environment variables override the config: `HTTP_PORT`, `MQTT_PORT`, `MQTTDASH_CONFIG` (path to the config file) and `MQTTDASH_DATA` (data folder).
 
-## Broker users and passwords
+## Logins (users)
 
-1. Create a password hash:
-   ```bash
-   node server/index.js hash-password 'a-good-password'
-   ```
-2. Paste the output into `passwordHash` for that user, and set `"enabled": true`.
-3. **`publish`** (optional) limits which topics a user may publish to. Wildcards are allowed, and other publishes from that user are silently dropped. Leave it out to allow everything.
-4. In the dashboard, open **⚙ Settings** and enter the username and password the browser should use. Each browser remembers its own.
+The users in `auth.users` are used for:
+- **Internet access** (through Cloudflare): always required, for both the dashboard and MQTT, while `remote.requireLogin` is `true` (the default).
+- **Everyone, including your home network**: only if you set `auth.enabled` to `true`.
 
-> **Turn on `auth` before exposing riotdash to the internet.** Without it, anyone who can reach the broker can read and write every topic.
+Manage them from the app folder. riotdash picks up changes within a few seconds:
+
+```bash
+node server/index.js add-user rob 'a-good-password'                       # add or change password
+node server/index.js add-user sensor-garage 'pw…' 'sensors/garage/#'     # may only publish under sensors/garage/
+node server/index.js list-users
+node server/index.js remove-user sensor-garage
+```
+
+The optional topics after the password limit what that user may **publish** (wildcards allowed). Other publishes are silently dropped.
+
+To make every device on your network log in too, set `"enabled": true` under `auth`, then enter a username and password in **⚙ Settings** on each browser.
+
+> If you expose riotdash some other way than Cloudflare (e.g. router port forwarding), set `auth.enabled` to `true`. Only Cloudflare traffic is recognised as coming from the internet.
 
 ## Using another broker
 

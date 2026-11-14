@@ -25,11 +25,12 @@ function hashPassword(password) {
 }
 
 class Session {
-  constructor(broker, conn, transport, remote) {
+  constructor(broker, conn, transport, remote, opts = {}) {
     this.broker = broker;
     this.conn = conn;
     this.transport = transport;
     this.remote = remote;
+    this.viaInternet = !!opts.viaInternet; // arrived through Cloudflare
     this.parser = new C.Parser();
     this.connected = false;
     this.subs = new Map(); // filter -> qos
@@ -107,11 +108,20 @@ class Session {
       clientId = 'auto-' + crypto.randomBytes(6).toString('hex');
     }
 
-    const auth = this.broker.config.auth || {};
-    if (auth.enabled) {
-      const user = (auth.users || []).find((u) => u.username === username);
-      if (!user || !verifyPassword(user, password)) {
-        this.broker.log(`auth failed for "${username || ''}" from ${this.remote}`);
+    const cfg = this.broker.config;
+    const auth = cfg.auth || {};
+    const needAuth = auth.enabled || (this.viaInternet && cfg.remote?.requireLogin !== false);
+    if (needAuth) {
+      let ok = false;
+      if (password && password.startsWith('session:')) {
+        const t = this.broker.sessionTokens.get(password.slice(8));
+        ok = !!t && t.exp > Date.now() && t.username === username;
+      } else {
+        const user = (auth.users || []).find((u) => u.username === username);
+        ok = !!user && verifyPassword(user, password);
+      }
+      if (!ok) {
+        this.broker.log(`auth failed for "${username || ''}" from ${this.remote}${this.viaInternet ? ' (internet)' : ''}`);
         this.send(C.packet(TYPES.CONNACK, 0, Buffer.from([0, 5])));
         return this.kill();
       }
@@ -222,6 +232,7 @@ class Broker extends EventEmitter {
     this.sessions = new Map();
     this.persistentSubs = new Map();
     this.retained = new Map(); // topic -> {payload, qos, ts}
+    this.sessionTokens = new Map(); // token -> {username, exp} for logged-in browsers
     this.stats = { messagesIn: 0, started: Date.now() };
     this.quiet = false;
   }
@@ -237,7 +248,16 @@ class Broker extends EventEmitter {
     return user.publish.some((f) => C.topicMatches(f, topic));
   }
 
-  attach(conn, transport, remote) { return new Session(this, conn, transport, remote); }
+  attach(conn, transport, remote, opts) { return new Session(this, conn, transport, remote, opts); }
+
+  // Short-lived MQTT credential for a browser that already logged in over HTTPS.
+  issueToken(username, ttlMs = 7 * 24 * 3600e3) {
+    const now = Date.now();
+    for (const [k, v] of this.sessionTokens) if (v.exp < now) this.sessionTokens.delete(k);
+    const token = crypto.randomBytes(24).toString('hex');
+    this.sessionTokens.set(token, { username, exp: now + ttlMs });
+    return token;
+  }
 
   publish(topic, payload, { qos = 0, retain = false, from = '$internal' } = {}) {
     payload = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload), 'utf8');
