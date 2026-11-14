@@ -47,7 +47,7 @@ async function confirm(q) { if (flag('yes')) return true; return /^y/i.test(awai
 let TOKEN = '';
 const HINTS = {
   zones: 'Zone → Zone → Read and Zone → DNS → Edit',
-  cfd_tunnel: 'Account → Cloudflare Tunnel → Edit',
+  cfd_tunnel: 'Account → Cloudflare One Connector: cloudflared → Edit (called "Cloudflare Tunnel" on older accounts)',
   dns_records: 'Zone → DNS → Edit',
 };
 async function cf(method, p, body) {
@@ -150,7 +150,7 @@ async function installCloudflared() {
   TOKEN = process.env.CLOUDFLARE_API_TOKEN || '';
   if (!TOKEN) {
     console.log(c.d('  Create one at https://dash.cloudflare.com/profile/api-tokens → Create Token → Custom token, with:'));
-    console.log(c.d('    Account → Cloudflare Tunnel → Edit'));
+    console.log(c.d('    Account → Cloudflare One Connector: cloudflared → Edit   (older accounts: Cloudflare Tunnel → Edit)'));
     console.log(c.d('    Zone → DNS → Edit      and    Zone → Zone → Read   (Zone resources: your domain)'));
     TOKEN = await askHidden('Paste the token (hidden)');
   }

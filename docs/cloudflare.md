@@ -31,9 +31,11 @@ On [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/
 
 | Type | Item | Permission |
 |---|---|---|
-| Account | Cloudflare Tunnel | Edit |
+| Account | Cloudflare One Connector: cloudflared | Edit |
 | Zone | DNS | Edit |
 | Zone | Zone | Read |
+
+> Older Cloudflare accounts call the first one **Cloudflare Tunnel**. **Cloudflare One Connectors → Edit** also works.
 
 Under **Zone Resources**, pick your domain (e.g. *anyesp.com*). Create the token and copy it. You'll paste it into the setup script.
 
