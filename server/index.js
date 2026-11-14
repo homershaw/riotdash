@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Broker, hashPassword, verifyPassword } = require('./broker');
 const users = require('./users');
+const { Riots } = require('./riot');
 const { acceptUpgrade } = require('./websocket');
 const { Store, safeId } = require('./store');
 const updater = require('./updater');
@@ -128,6 +129,10 @@ setInterval(() => {
   store.flushHistory();
 }, 5000).unref();
 if (config.sysTopics) broker.startSysTopics();
+
+// RIOT controllers: discovery, approval and decoding (server/riot.js)
+const riots = new Riots({ broker, store, config, log: (...a) => broker.log(...a) });
+for (const [topic, m] of broker.retained) { try { riots.onMessage({ topic, payload: m.payload, retain: true }); } catch { /* ignore */ } }
 
 // Seed a demo dashboard the first time
 if (store.listDashboards().length === 0) {
@@ -267,6 +272,35 @@ function httpAuth(req) {
   return { ok: true, user: null };
 }
 
+async function handleRiotApi(req, res, parts) {
+  const m = req.method;
+  const body = async () => JSON.parse((await readBody(req)) || '{}');
+  try {
+    if (parts[1] === 'riot-profiles') {
+      const model = decodeURIComponent(parts[2] || '');
+      if (!model) return json(res, 200, riots.profiles);
+      if (m === 'GET') return json(res, 200, riots.profile(model));
+      if (m === 'PUT') {
+        const b = await body();
+        const p = riots.setProfile(model, b);
+        const rebuilt = b.rebuild ? riots.rebuildModel(model) : 0;
+        return json(res, 200, { ok: true, profile: p, rebuilt });
+      }
+      return json(res, 405, { error: 'method not allowed' });
+    }
+    const id = parts[2] ? decodeURIComponent(parts[2]) : null;
+    if (!id && m === 'GET') return json(res, 200, { prefix: riots.prefix, devices: riots.list(), profiles: riots.profiles });
+    if (!id) return json(res, 405, { error: 'method not allowed' });
+    const action = parts[3];
+    if (m === 'POST' && action === 'approve') { const b = await body(); riots.approve(id, b.name); return json(res, 200, { ok: true, dashboard: require('./riot-pages').pageId(id) }); }
+    if (m === 'POST' && action === 'reject') { riots.reject(id); return json(res, 200, { ok: true }); }
+    if (m === 'POST' && action === 'rebuild') { riots.buildPage(id); riots.buildOverview(); return json(res, 200, { ok: true }); }
+    if (m === 'PUT' && !action) { const b = await body(); riots.update(id, b); if (b.rebuild) { riots.buildPage(id); riots.buildOverview(); } return json(res, 200, { ok: true }); }
+    if (m === 'DELETE' && !action) { riots.forget(id); return json(res, 200, { ok: true }); }
+    return json(res, 404, { error: 'not found' });
+  } catch (e) { return json(res, 400, { error: e.message }); }
+}
+
 async function handleApi(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
   const method = req.method;
@@ -282,9 +316,10 @@ async function handleApi(req, res, url) {
       name: 'MQTT Dash', version: updater.appVersion(ROOT),
       clients: broker.sessions.size, retained: broker.retained.size, messagesIn: broker.stats.messagesIn,
       uptime: Math.round((Date.now() - broker.stats.started) / 1000),
-      mqttPort: config.mqtt.port, wsPath: config.mqtt.wsPath, authEnabled: !!config.auth.enabled,
+      mqttPort: config.mqtt.port, wsPath: config.mqtt.wsPath, authEnabled: !!config.auth.enabled, riotsPending: riots.pendingCount(),
     });
   }
+  if (parts[1] === 'riots' || parts[1] === 'riot-profiles') return handleRiotApi(req, res, parts);
   if (parts[1] === 'topics' && method === 'GET') return json(res, 200, store.listTopics().map((t) => ({ ...t, retained: broker.retained.has(t.topic) })));
   if (parts[1] === 'history' && method === 'GET') {
     const topic = url.searchParams.get('topic');
@@ -319,6 +354,7 @@ function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
   if (p === '/' || p.startsWith('/d/')) p = '/index.html';
   if (p === '/explorer') p = '/explorer.html';
+  if (p === '/riots') p = '/riots.html';
   const file = path.normalize(path.join(PUBLIC, p));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
   fs.stat(file, (err, st) => {
@@ -404,6 +440,7 @@ fs.watchFile(configPath, { interval: 2000 }, () => {
 }).unref?.();
 
 function saveState() {
+  try { riots.flush(); } catch { /* ignore */ }
   try { store.saveRetained(broker.retained); store.dirty = true; store.flushHistory(); } catch (e) { console.error(e); }
 }
 function shutdown() {

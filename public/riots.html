@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="theme-color" content="#111827">
+  <title>Riots · riotdash</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/explorer.css">
+  <link rel="stylesheet" href="/css/riots.css">
+</head>
+<body class="riots-page">
+  <header class="topbar">
+    <div class="brand"><img src="/favicon.svg" alt=""> <span>MQTT Dash</span></div>
+    <nav class="tabs">
+      <a href="/" class="tab">Dashboards</a>
+      <a href="/riots" class="tab active">Riots</a>
+      <a href="/explorer" class="tab">Explorer</a>
+    </nav>
+    <div class="spacer"></div>
+    <a href="/#/d/riots" class="btn">Overview</a>
+  </header>
+
+  <main class="rp">
+    <section>
+      <h2>Waiting for approval <span id="pendingCount" class="badge"></span></h2>
+      <p class="hint">Controllers that publish a description on <code id="prefixHint">riot/&lt;id&gt;/info</code> show up here. Approving one builds its page and adds it to the Riots overview.</p>
+      <div id="pending" class="cards"></div>
+    </section>
+
+    <section>
+      <h2>Controllers</h2>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Name</th><th>ID</th><th>Model</th><th>Status</th><th>Last data</th><th></th></tr></thead>
+        <tbody id="approved"></tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>Model profiles</h2>
+      <p class="hint">Friendly names for each controller type. Every controller of that model uses them, unless it has its own name for a Tag.</p>
+      <div id="profiles"></div>
+    </section>
+
+    <section id="rejectedSec" hidden>
+      <h2>Rejected</h2>
+      <div id="rejected" class="cards"></div>
+    </section>
+  </main>
+
+  <dialog id="labelsDlg" class="labels-dlg">
+    <div class="ld">
+      <div class="ld-head"><h2 id="ldTitle">Labels</h2><button class="btn ghost" type="button" data-close aria-label="Close">✕</button></div>
+      <p id="ldHint" class="hint"></p>
+      <div class="ld-body"><table class="tbl"><thead><tr><th>Tag</th><th>Units</th><th id="ldColLabel">Label</th></tr></thead><tbody id="ldRows"></tbody></table></div>
+      <label class="chk"><input id="ldRebuild" type="checkbox" checked> Rebuild the page(s) now <small>(replaces manual edits on those pages)</small></label>
+      <div class="dlg-actions"><button class="btn" type="button" data-close>Cancel</button><button id="ldSave" class="btn primary" type="button">Save</button></div>
+    </div>
+  </dialog>
+
+  <div id="toasts"></div>
+  <script type="module" src="/js/riots.js"></script>
+</body>
+</html>

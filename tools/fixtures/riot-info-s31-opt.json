@@ -1,0 +1,446 @@
+{
+ "type": "INFO",
+ "schema": 1,
+ "epoch": 1794638532,
+ "uptimeSec": 521,
+ "ip": "192.0.2.45",
+ "model": "ESP32-S31-OPT",
+ "product": "RIOT Controller / ESP32-S31 OPT",
+ "firmware": "S31-OPT261114",
+ "build": "20261114T062908Z 6221c5f5+dirty",
+ "clientId": "RiotP4-1C2904FF0000",
+ "site": {
+  "name": "Example well",
+  "location": ""
+ },
+ "topics": {
+  "info": "riot/0000/info",
+  "status": "riot/0000/status/online",
+  "telemetry": "riot/0000/telemetry",
+  "test": "riot/0000/test"
+ },
+ "telemetry": {
+  "enabled": true,
+  "intervalSec": 60,
+  "tags": 27
+ },
+ "io": {
+  "m31": {
+   "host": "192.0.2.150",
+   "port": 502,
+   "unit": 1,
+   "ai": 8,
+   "ao": 4,
+   "di": 4,
+   "do": 4
+  },
+  "mvs": 0,
+  "flowRuns": [
+   {
+    "run": 1,
+    "name": "Run 1"
+   }
+  ]
+ },
+ "tags": [
+  {
+   "name": "M31.AI1",
+   "base": "M31.AI1",
+   "label": "M31.AI1",
+   "id": 256,
+   "units": "kPa",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI1",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AI2",
+   "base": "M31.AI2",
+   "label": "M31.AI2",
+   "id": 257,
+   "units": "kPa",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI2",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    5420.0
+   ]
+  },
+  {
+   "name": "M31.AI3",
+   "base": "M31.AI3",
+   "label": "M31.AI3",
+   "id": 258,
+   "units": "C",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI3",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AI4",
+   "base": "M31.AI4",
+   "label": "M31.AI4",
+   "id": 259,
+   "units": "kPa",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI4",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    3500.0
+   ]
+  },
+  {
+   "name": "M31.AI5",
+   "base": "M31.AI5",
+   "label": "M31.AI5",
+   "id": 280,
+   "units": "kPa",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI5",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    3500.0
+   ]
+  },
+  {
+   "name": "M31.AI6",
+   "base": "M31.AI6",
+   "label": "M31.AI6",
+   "id": 281,
+   "units": "kPa",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI6",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    2500.0
+   ]
+  },
+  {
+   "name": "M31.AI7",
+   "base": "M31.AI7",
+   "label": "M31.AI7",
+   "id": 282,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI7",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AI8",
+   "base": "M31.AI8",
+   "label": "M31.AI8",
+   "id": 283,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AI8",
+   "writable": false,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AO1",
+   "base": "M31.AO1",
+   "label": "M31.AO1",
+   "id": 284,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AO1",
+   "writable": true,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AO2",
+   "base": "M31.AO2",
+   "label": "M31.AO2",
+   "id": 285,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AO2",
+   "writable": true,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AO3",
+   "base": "M31.AO3",
+   "label": "M31.AO3",
+   "id": 286,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AO3",
+   "writable": true,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.AO4",
+   "base": "M31.AO4",
+   "label": "M31.AO4",
+   "id": 287,
+   "units": "%",
+   "type": "analog",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "AO4",
+   "writable": true,
+   "telemetry": true,
+   "range": [
+    0.0,
+    100.0
+   ]
+  },
+  {
+   "name": "M31.DI1",
+   "base": "M31.DI1",
+   "label": "M31.DI1",
+   "id": 260,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DI1",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DI2",
+   "base": "M31.DI2",
+   "label": "M31.DI2",
+   "id": 261,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DI2",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DI3",
+   "base": "M31.DI3",
+   "label": "M31.DI3",
+   "id": 262,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DI3",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DI4",
+   "base": "M31.DI4",
+   "label": "M31.DI4",
+   "id": 263,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DI4",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DO1",
+   "base": "M31.DO1",
+   "label": "M31.DO1",
+   "id": 264,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DO1",
+   "writable": true,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DO2",
+   "base": "M31.DO2",
+   "label": "M31.DO2",
+   "id": 265,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DO2",
+   "writable": true,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DO3",
+   "base": "M31.DO3",
+   "label": "M31.DO3",
+   "id": 266,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DO3",
+   "writable": true,
+   "telemetry": true
+  },
+  {
+   "name": "M31.DO4",
+   "base": "M31.DO4",
+   "label": "M31.DO4",
+   "id": 267,
+   "units": "",
+   "type": "digital",
+   "source": "M31 rack",
+   "device": "M31",
+   "point": "DO4",
+   "writable": true,
+   "telemetry": true
+  },
+  {
+   "name": "FLOW1.RATE",
+   "base": "FLOW1.RATE",
+   "label": "FLOW1.RATE",
+   "id": 296,
+   "units": "e3m3/day",
+   "type": "analog",
+   "source": "Flow run",
+   "device": "FLOW1",
+   "point": "RATE",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "FLOW1.HOUR",
+   "base": "FLOW1.HOUR",
+   "label": "FLOW1.HOUR",
+   "id": 297,
+   "units": "E3m3",
+   "type": "analog",
+   "source": "Flow run",
+   "device": "FLOW1",
+   "point": "HOUR",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "FLOW1.DAY",
+   "base": "FLOW1.DAY",
+   "label": "FLOW1.DAY",
+   "id": 298,
+   "units": "E3m3",
+   "type": "analog",
+   "source": "Flow run",
+   "device": "FLOW1",
+   "point": "DAY",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "FLOW1.GRAND",
+   "base": "FLOW1.GRAND",
+   "label": "FLOW1.GRAND",
+   "id": 299,
+   "units": "E3m3",
+   "type": "analog",
+   "source": "Flow run",
+   "device": "FLOW1",
+   "point": "GRAND",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "TUBING_COPY",
+   "base": "TUBING_COPY",
+   "label": "TUBING_COPY",
+   "id": 291,
+   "units": "%",
+   "type": "analog",
+   "source": "Calculation",
+   "device": "Calculations",
+   "point": "VALUE",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "DOUBLE_TUBING",
+   "base": "DOUBLE_TUBING",
+   "label": "DOUBLE_TUBING",
+   "id": 292,
+   "units": "kPa",
+   "type": "analog",
+   "source": "Calculation",
+   "device": "Calculations",
+   "point": "VALUE",
+   "writable": false,
+   "telemetry": true
+  },
+  {
+   "name": "WELL_DEPTH",
+   "base": "WELL_DEPTH",
+   "label": "WELL_DEPTH",
+   "id": 293,
+   "units": "m",
+   "type": "analog",
+   "source": "Manual value",
+   "device": "Manual values",
+   "point": "VALUE",
+   "writable": true,
+   "telemetry": true
+  }
+ ]
+}
