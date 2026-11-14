@@ -203,7 +203,12 @@ async function checkGithub(repo, channel, current) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw new Error('updates.github in config.json must look like owner/repo');
   let latest, refName, ref;
   if (channel === 'main') {
-    latest = (await (await gh(`${GH_RAW}/${repo}/main/package.json`)).json()).version;
+    let pkg;
+    try { pkg = await (await gh(`${GH_RAW}/${repo}/main/package.json`)).json(); } catch (e) {
+      if (/ 404 /.test(e.message)) return { current, latest: null, available: false, message: 'Nothing has been published to the main branch yet.' };
+      throw e;
+    }
+    latest = pkg.version;
     refName = 'main'; ref = 'heads/main';
   } else {
     const tags = (await (await gh(`${GH_API}/repos/${repo}/tags?per_page=100`)).json()).map((t) => t.name).filter((n) => /^v?\d+\.\d+\.\d+$/.test(n));

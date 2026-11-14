@@ -11,18 +11,18 @@
 
 **No internet on the server?** Open **Install from a file instead** in the same dialog. Upload a `.tar.gz` downloaded from GitHub, e.g. `https://github.com/homershaw/riotdash/archive/refs/tags/v0.5.0.tar.gz`, or one built with `tools/release.sh`.
 
-### Stable or latest
+### Where updates come from
 
 In `config.json`:
 
 ```json
-"updates": { "github": "homershaw/riotdash", "channel": "stable" }
+"updates": { "github": "homershaw/riotdash", "channel": "main" }
 ```
 
 | Channel | Gets |
 |---|---|
-| `stable` (default) | The highest version tag (`v0.5.0`, `v0.5.1`, …). Only published releases. |
-| `main` | Whatever is on the `main` branch, compared by the version in `package.json` |
+| `main` (default) | The `main` branch, whenever its `package.json` version is higher than yours |
+| `stable` | Only versions published as tags (`v0.5.1`, `v0.6.0`, …), e.g. GitHub Releases |
 
 Set `"github": ""` to turn off checking GitHub.
 
@@ -64,17 +64,15 @@ git pull
 
 ## Publishing a new version (maintainers)
 
-The app looks for **version tags** in the repo, so publishing a release is:
+With the default `main` channel, **merging to `main` is releasing**:
 
-1. Bump `version` in `package.json` (e.g. `0.5.1`).
+1. Make the changes on a branch and bump `version` in `package.json` (e.g. `0.5.1`).
 2. Add a `## 0.5.1` section at the top of `CHANGELOG.md`. The app shows it as "What's new".
-3. Commit to `main`, then tag and push:
-   ```bash
-   git tag v0.5.1
-   git push origin main v0.5.1
-   ```
+3. Open a pull request and merge it into `main`.
 
-Every riotdash install on the `stable` channel then sees *v0.5.1 is available* in **Settings → Updates**. You can also create a GitHub Release from the tag for nicer release notes on GitHub; the app only needs the tag.
+Every riotdash install then sees *v0.5.1 is available* in **Settings → Updates** (checks are cached for up to 30 minutes; **Check again** forces one).
+
+If you'd rather test on `main` before installs pick it up, set `"channel": "stable"` and publish a **GitHub Release** with a tag such as `v0.5.1` when you're ready.
 
 To build a package file for offline installs:
 
@@ -90,5 +88,6 @@ tools/release.sh            # → dist/mqtt-dash-<version>.tar.gz from the curre
 | *Wrong admin password* | See [Admin password](#admin-password) to reset it. |
 | *Package has no package.json* | That isn't a riotdash package. Use the `.tar.gz`, not a `.zip`. |
 | *Couldn't check for updates / rate limit* | GitHub allows about 60 checks an hour without a login. The app caches checks for 30 minutes; wait and press **Check again**. |
-| *Already up to date* | The highest tag on GitHub isn't newer than what you run. |
+| *Already up to date* | The version on GitHub isn't newer than what you run. |
+| *Nothing has been published to the main branch yet* | Merge the pull request that adds the app to `main`. |
 | Page doesn't come back after installing | Check the server log (`journalctl -u mqtt-dash -f` or the terminal), then roll back from the dialog or with the files in `.backups/`. |

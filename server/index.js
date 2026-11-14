@@ -50,7 +50,7 @@ const DEFAULTS = {
   dataDir: './data',
   historyPoints: 2000,
   sysTopics: true,
-  updates: { github: 'homershaw/riotdash', channel: 'stable' },
+  updates: { github: 'homershaw/riotdash', channel: 'main' },
 };
 const configPath = process.env.MQTTDASH_CONFIG || path.join(ROOT, 'config.json');
 // First run: create config.json from the example so you have something to edit. Updates never touch it.

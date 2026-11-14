@@ -1,9 +1,10 @@
 # Changelog
 
 ## 0.5.0
-- Updates from GitHub: Settings → Updates checks github.com/homershaw/riotdash and installs new releases with one click.
+- Updates from GitHub: Settings → Updates checks github.com/homershaw/riotdash and installs a new version with one click.
+- A new version is published by merging to `main` with a higher `version` in package.json.
 - The ⚙ button shows a dot when an update is available.
-- Choose `"channel": "stable"` (version tags) or `"main"` (latest code) under `updates` in config.json.
+- Optional `"channel": "stable"` under `updates` in config.json follows version tags (vX.Y.Z) instead of main.
 - Install from a file is still available as a fallback.
 - Documentation moved to the docs/ folder.
 

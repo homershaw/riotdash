@@ -16,7 +16,7 @@ async function checkGithub(force) {
   } catch { gh = { error: 'Could not reach the server' }; }
   showBadge(gh);
   if (gh.disabled) { $('#ghStatus').textContent = 'GitHub updates are turned off (updates.github is empty in config.json).'; return; }
-  $('#ghSource').textContent = gh.repo ? `github.com/${gh.repo} · ${gh.channel === 'main' ? 'latest main branch' : 'stable releases'}` : '';
+  $('#ghSource').textContent = gh.repo ? `github.com/${gh.repo} · ${gh.channel === 'main' ? 'main branch' : 'release tags'}` : '';
   if (gh.error) { $('#ghStatus').textContent = 'Couldn’t check for updates: ' + gh.error; return; }
   if (!gh.latest) { $('#ghStatus').textContent = gh.message || 'No releases found.'; return; }
   if (gh.available) {
