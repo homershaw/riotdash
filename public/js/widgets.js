@@ -642,23 +642,25 @@ WIDGETS.plunger = {
       const j = last; if (!j) return;
       const pv = j.pv || {}, t = j.timers || {}, c = j.config || {}, pl = j.plunger || {};
       const elapsedMin = j.running ? (Date.now() - at) / 60000 : 0;   // run the timers forward between messages
-      const open = !!j.valveOpen, known = j.valveKnown !== false;
+      const open = !!j.valveOpen, known = j.valveKnown !== false, msc = j.modeStatusCode;
       const esdOk = j.esd !== false;
-      const banner = j.banner || (!j.running ? 'STOPPED' : !esdOk ? 'ESD' : !known ? 'VALVE ?' : open ? 'FLOWING' : 'SHUT IN');
+      const offCycle = [2003, 2004, 2006, 2010, 2014, 2016].includes(msc);
+      const flowing = known ? open : !offCycle && msc > 0;   // valve unknown: follow the optimizer's cycle
+      const banner = j.banner || (!j.running ? 'STOPPED' : !esdOk ? 'ESD' : flowing ? 'FLOWING' : 'SHUT IN');
       const b = $('.plg-banner'); b.textContent = banner;
-      b.className = 'plg-banner ' + (j.banner ? 'shutin' : !j.running ? 'stopped' : !esdOk ? 'esd' : open ? 'flowing' : 'shutin');
-      const msc = j.modeStatusCode;
+      b.className = 'plg-banner ' + (j.banner ? 'shutin' : !j.running ? 'stopped' : !esdOk ? 'esd' : flowing ? 'flowing' : 'shutin');
       $('.plg-stage').textContent = j.modeStatusText || MSC[msc] || '';
-      const onCycle = open;
+      const onCycle = flowing;
       const x = (onCycle ? t.timeOn : t.timeOff), y = onCycle ? c.timeOnSp : c.timeOffSp;
-      const xr = Number.isFinite(x) ? x + elapsedMin : x;
+      const xr = Number.isFinite(x) ? (y > 0 ? Math.min(y, x + elapsedMin) : x + elapsedMin) : x;   // a finished timer stays at its setpoint
       $('.plg-tlabel').textContent = onCycle ? 'Time on' : 'Time off';
       $('.plg-t1').textContent = optFmt(xr, 1); $('.plg-t2').textContent = optFmt(y, 1);
       const pct = y > 0 && Number.isFinite(xr) ? Math.max(0, Math.min(1, xr / y)) : 0;
       $('.plg-bar i').style.width = pct * 100 + '%';
       $('.plg-remain').textContent = y > 0 && Number.isFinite(xr) ? `${onCycle ? (msc === 2012 ? 'Afterflow' : 'Flow time') : 'Shut-in'} ${optFmt(Math.max(0, y - xr), 1)} min left` : '';
       $('.plg-mode').textContent = `Mode ${j.mode ?? '—'} · ${j.modeName || ''}`;
-      $('.plg-err').textContent = j.errorCode ? `Error ${j.errorCode}${j.errorText ? ': ' + j.errorText : ''}` : 'No error';
+      $('.plg-err').textContent = (j.errorCode ? `Error ${j.errorCode}${j.errorText ? ': ' + j.errorText : ''}` : 'No error') + (!known ? ` · Valve feedback unknown${j.valveNote ? ' (' + j.valveNote + ')' : ''}` : '');
+      $('.plg-err').classList.toggle('warn', !known && !j.errorCode);
       $('.plg-err').classList.toggle('bad', !!j.errorCode);
       for (const k of ['onTime', 'early', 'late', 'failed']) el.querySelector(`[data-k="${k}"]`).textContent = optFmt(pl[k]);
       const trips = tripsOf(j);
@@ -666,13 +668,13 @@ WIDGETS.plunger = {
       $('.plg-trip').innerHTML = `${lt ? `Last trip <b>${optFmt(lt.trip, 1)} min</b> · <b>${optFmt(lt.velocity, 0)} m/min</b> &nbsp; ` : ''}Avg <b>${optFmt(pl.avgVelocity, 0)} m/min</b> · Target <b>${optFmt(c.targetVelocity, 0)} m/min</b>`;
       for (const k of ['casing', 'tubing', 'line']) el.querySelector(`[data-pv="${k}"]`).textContent = optFmt(pv[k], 0);
       el.querySelector('[data-pv="flow"]').textContent = optFmt(pv.flow, 2);
-      el.querySelector('[data-f="cf"]').textContent = `${optFmt(pv.criticalFlow, 2)} E3m3/d`;
+      el.querySelector('[data-f="cf"]').textContent = `${optFmt(pv.criticalFlow, 2)} E3m3/d${pv.criticalFlowManual ? ' (manual)' : ''}`;
       el.querySelector('[data-f="lf"]').textContent = `${optFmt(pv.loadFactor, 0)} %`;
       el.querySelector('[data-f="cl"]').textContent = `${optFmt(Number(pv.casing) - Number(pv.line), 0)} kPa`;
       const esdEl = el.querySelector('[data-f="esd"]'); esdEl.textContent = esdOk ? 'OK' : 'TRIPPED'; esdEl.classList.toggle('bad', !esdOk);
       // wellbore: valve colour and an approximate plunger position from the cycle (real wells have no position sensor)
       $('.plg-valve').setAttribute('class', 'plg-valve ' + (!known ? '' : open ? 'open' : 'closed'));
-      $('.plg-vtext').textContent = !known ? '' : open ? 'OPEN' : 'CLOSED';
+      $('.plg-vtext').textContent = !known ? 'UNKNOWN' : open ? 'OPEN' : 'CLOSED';
       const depth = Number(c.wellDepth);
       $('.plg-depth').textContent = Number.isFinite(depth) && depth > 0 ? `${optFmt(depth)} m` : '';
       const pos = !j.running ? null : !open ? 330 : msc === 2012 ? 22 : 190;   // bottom / rising / at surface

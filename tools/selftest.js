@@ -167,6 +167,16 @@ function wsMqtt(headers, username, password) {
   const st = JSON.parse((tp3.find((t) => t.topic === 'riot/AB13/opt7/1') || { payload: '{}' }).payload);
   ok(st.running === true && st.esd === true && st.valveOpen === true && st.pv?.casing === 2392 && st.modeStatusCode === 2012 && Math.abs(st.timers?.timeOn - 26.2) < 0.01 && st.plunger?.history?.[0]?.velocity > 240,
     'optimizer soft points assembled into the plunger panel status (timer 32.7 - 6.5 left = 26.2; unbound ESD not shown as tripped)');
+  // The controller page scenario: OPT 7.02 running, Line Pressure High cycle, manual critical flow, M31 offline (DO tags BAD)
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/telemetry', payload: JSON.stringify({ type: 'TELEMETRY', part: 1, parts: 1, tags: [1, 2, 3, 4].map((n) => ({ name: `M31.DO${n}`, value: 0, quality: 'BAD', eu: '' })) }) }));
+  await sleep(150);
+  const sp2 = { SPT0: { 'SPT0.1': 1, 'SPT0.2': 1, 'SPT0.4': 60.9985, 'SPT0.9': 2000 }, SPT1: { 'SPT1.1': 1, 'SPT1.2': 20, 'SPT1.9': 1, 'SPT1.11': 10 },
+    SPT3: { 'SPT3.0': 70200, 'SPT3.1': 0, 'SPT3.5': 0, 'SPT3.12': 17.1467 }, SPT4: { 'SPT4.1': 2010 }, SPT5: { 'SPT5.12': 1250, 'SPT5.13': 2800, 'SPT5.14': 1800, 'SPT5.16': 0, 'SPT5.20': 0 } };
+  for (const [k, v] of Object.entries(sp2)) a.s.write(C.encodePublish({ topic: `riot/AB13/opt/${k}`, payload: JSON.stringify({ ts: 1794643804, v }) }));
+  await sleep(900);
+  const st2 = JSON.parse(((await (await get('/api/topics')).json()).find((t) => t.topic === 'riot/AB13/opt7/1') || { payload: '{}' }).payload);
+  ok(st2.running && st2.esd && st2.valveKnown === false && st2.pv.criticalFlow === 20 && st2.pv.criticalFlowManual && st2.programVersion === '7.02.00' && st2.timers.timeOff === 10,
+    'matches the controller page: running, ESD not used, valve unknown (M31 offline), manual critical flow 20, OPT 7.02.00');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);

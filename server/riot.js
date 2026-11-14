@@ -142,7 +142,10 @@ class Riots {
   publishSptStatus(d) {
     const v = (k) => { const x = d.spt[k]; return x === null || x === undefined ? null : Number(x); };
     if (v('SPT5.12') === null && v('SPT0.4') === null) return;   // nothing useful yet
-    const status = sptToStatus(v);
+    // Valve feedback comes from the M31 rack: if all its DO Tags are not GOOD (M31 offline), the valve state is unknown,
+    // as the controller's own page shows, even though the valve soft point reads 0.
+    const doQ = [1, 2, 3, 4].map((n) => this.quality.get(`${d.id}/M31.DO${n}`)).filter(Boolean);
+    const status = sptToStatus(v, { valveUnknown: doQ.length > 0 && doQ.every((q) => q !== 'GOOD') });
     status.epoch = d.sptTs || Math.floor(Date.now() / 1000);
     status.source = 'soft points';
     this.broker.publish(`${this.prefix}/${d.id}/opt7/1`, JSON.stringify(status), { retain: true, from: '$riot' });
@@ -256,10 +259,12 @@ const OPT_MODES = ['Invalid', 'Time On vs. Time Off', 'Critical Flow vs. Time Of
 // OPT 7.02 (C port): 0 stopped, 1 running. OPT 5 port: 2 inactive, 3 running, 5 fast plunger, 6 valve conflict, 7 line high.
 const PROGRAM_STATUS = { 0: 'Stopped', 1: 'Running', 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
 // Program error codes shared by OPT 7.02 (opt7/opt.h) and the OPT 5 port (WellOptCore.h).
+// Program version register: 70200 → "7.02.00", 5 → "5.00"
+const version = (x) => (!(x > 0) ? undefined : x >= 10000 ? `${Math.floor(x / 10000)}.${String(Math.floor(x / 100) % 100).padStart(2, '0')}.${String(x % 100).padStart(2, '0')}` : Number(x).toFixed(2));
 const OPT_ERRORS = { 111: 'Line pressure input', 112: 'Line pressure high', 114: 'Fast plunger shut-in', 115: 'Stopped by operator',
   116: 'ESD input invalid', 117: 'Well ESD', 118: 'Start position', 119: 'Mode 8 needs a plunger', 120: 'Flow run' };
 // v(key) -> number|null for soft points "SPTn.p". Timers in the soft points count down (minutes remaining).
-function sptToStatus(v) {
+function sptToStatus(v, { valveUnknown = false } = {}) {
   const mode = v('SPT0.1'), ps = v('SPT1.1'), valve = v('SPT5.16'), depth = v('SPT0.9');
   const onSp = v('SPT1.9'), offSp = v('SPT1.11'), onLeft = v('SPT5.18'), offLeft = v('SPT5.20');
   const elapsed = (sp, left) => (sp === null || left === null ? null : Math.max(0, sp - left));
@@ -276,8 +281,11 @@ function sptToStatus(v) {
     modeStatusCode: v('SPT4.1'), modeStatusText: running ? undefined : PROGRAM_STATUS[ps],
     // ESD: judged from the program error (117 ESD, 116 invalid ESD input). The ESD soft point reads 0 when no ESD input is bound,
     // while the optimizer itself treats an unbound ESD as permissive.
-    errorCode: err, errorText: OPT_ERRORS[err], valveOpen: valve > 0, valveKnown: valve !== null, esd: !(err === 116 || err === 117),
-    pv: { casing: v('SPT5.12'), tubing: v('SPT5.13'), line: v('SPT5.14'), flow: v('SPT0.4'), criticalFlow: v('SPT3.12'), casingTubingDp: v('SPT3.9'), loadFactor: v('SPT3.16') },
+    errorCode: err, errorText: OPT_ERRORS[err], valveOpen: valve > 0, valveKnown: valve !== null && !valveUnknown, valveNote: valveUnknown ? 'M31 offline' : undefined,
+    esd: !(err === 116 || err === 117), programVersion: version(v('SPT3.0')),
+    // Critical flow: the manual setpoint when the override is on (SPT0.2), else the calculated value, as /api/optimization does.
+    pv: { casing: v('SPT5.12'), tubing: v('SPT5.13'), line: v('SPT5.14'), flow: v('SPT0.4'), criticalFlow: v('SPT0.2') ? v('SPT1.2') : v('SPT3.12'),
+      criticalFlowManual: !!v('SPT0.2'), casingTubingDp: v('SPT3.9'), loadFactor: v('SPT3.16') },
     timers: { timeOn: elapsed(onSp, onLeft), timeOff: elapsed(offSp, offLeft), flowTime: v('SPT3.14'), shutInTime: v('SPT3.15') },
     plunger: { onTime: v('SPT3.18'), early: v('SPT3.19'), late: v('SPT3.20'), failed: v('SPT3.21'), avgVelocity: v('SPT5.17'), history,
       lastVelocity: v('SPT3.10'), lastDuration: v('SPT3.11') },
