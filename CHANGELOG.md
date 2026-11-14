@@ -2,6 +2,7 @@
 
 ## 0.7.2
 - Fix: OPT 7.02 wells showed STOPPED on the plunger lift panel while running. OPT 7.02 reports running as program status 1 (the OPT 5 port uses 3); both now count as running.
+- Fix: ESD showed as TRIPPED on wells without an ESD input. The ESD soft point reads 0 when no ESD is bound, so riotdash now judges ESD from the program error (117 well ESD, 116 invalid ESD input), the same as the optimizer. Program errors are shown by name.
 
 ## 0.7.1
 - The plunger lift panel and optimizer trend also work with controllers that send the optimizer as soft points (`riot/<id>/opt/SPT0`–`SPT5`, the SCADAPack OPT register map). riotdash assembles the panel from them: the timers count down in the soft points and are shown as elapsed against their setpoint, and plunger trips come from SPT4. Program status 5 (fast plunger) and 7 (line pressure high) show as SHUT IN with the reason.
