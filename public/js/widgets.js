@@ -586,6 +586,179 @@ export const WIDGETS = {
   },
 };
 
+
+// ---------- RIOT OPT 7.02 panels ----------
+// Both read the retained optimizer status on <riot>/<id>/opt7/<run> (the controller's /api/optimization JSON).
+const MSC = {0:'Mode inactive',2001:'Time On Cycle',2002:'Time On Bypass Cycle',2003:'Time Off Cycle',2004:'Time Off Bypass Cycle',2005:'Pre-Flow On Cycle',2006:'Pre-Flow Off Cycle',2007:'Critical Flow Bypass Cycle',2008:'Casing Static DP Bypass Cycle',2009:'Stable Flow',2010:'Line Pressure High Cycle',2011:'Plunger Bypass Cycle',2012:'Post Plunger Sales Cycle',2013:'Casing Bypass Cycle',2014:'Backup Time Off Cycle',2015:'Load Factor Bypass Cycle',2016:'Extended Shut-in Cycle'};
+const optFmt = (v, d = 0) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(d));
+const stampTime = (st) => { const s = String(st).padStart(8, '0'); return `${s.slice(4, 6)}:${s.slice(6, 8)}`; };   // MMDDhhmm
+const tripsOf = (j) => ((j && j.plunger && j.plunger.history) || []).filter((t) => t.trip > 0).sort((a, b) => b.stamp - a.stamp);
+
+WIDGETS.plunger = {
+  label: 'Plunger lift', group: 'Process', size: [1000, 430],
+  defaults: { topic: '' },
+  fields: [{ key: 'topic', label: 'Optimizer status topic', type: 'topic', hint: 'riot/<id>/opt7/1' }],
+  create(el, p) {
+    el.classList.add('plg-host');
+    el.innerHTML = `<div class="plg">
+      <div class="plg-well"><svg viewBox="0 0 180 360" preserveAspectRatio="xMidYMid meet">
+        <line x1="0" y1="74" x2="56" y2="74" class="plg-ground"/><line x1="90" y1="74" x2="180" y2="74" class="plg-ground"/>
+        <rect x="58" y="20" width="22" height="330" class="plg-casing"/>
+        <rect x="64" y="16" width="10" height="334" class="plg-tubing"/>
+        <rect x="76" y="20" width="12" height="9" class="plg-sensor"/>
+        <line x1="74" y1="40" x2="180" y2="40" class="plg-flowline"/>
+        <g class="plg-valve" transform="translate(118 40)"><polygon points="-12,-8 0,0 -12,8"/><polygon points="12,-8 0,0 12,8"/><line x1="0" y1="0" x2="0" y2="-14"/><line x1="-7" y1="-14" x2="7" y2="-14"/></g>
+        <g class="plg-plunger"><rect x="64" y="0" width="10" height="16" rx="2"/></g>
+        <text x="2" y="16" class="plg-small">ARRIVAL</text><text x="180" y="34" class="plg-small" text-anchor="end">SALES</text>
+        <text x="118" y="60" class="plg-small plg-vtext" text-anchor="middle"></text>
+        <text x="2" y="86" class="plg-small">0 m</text><text x="2" y="348" class="plg-small plg-depth"></text>
+        <text x="92" y="0" class="plg-small plg-ptext"></text>
+      </svg></div>
+      <div class="plg-mid">
+        <div class="plg-banner">—</div>
+        <div class="plg-stage">Waiting for optimizer data…</div>
+        <div class="plg-tlabel"></div>
+        <div class="plg-timer"><b class="plg-t1">—</b> / <span class="plg-t2">—</span> <small>min</small></div>
+        <div class="plg-bar"><i></i></div>
+        <div class="plg-remain"></div>
+        <div class="plg-mode"></div>
+        <div class="plg-err"></div>
+        <div class="plg-arr-title">Plunger arrivals</div>
+        <div class="plg-arr"><div><span>On time</span><b data-k="onTime">—</b></div><div><span>Early</span><b data-k="early">—</b></div><div><span>Late</span><b data-k="late">—</b></div><div><span>Failed</span><b data-k="failed">—</b></div></div>
+        <div class="plg-trip"></div>
+      </div>
+      <div class="plg-right">
+        <div class="plg-pv"><span>Casing</span><small>kPa</small><b data-pv="casing">—</b></div>
+        <div class="plg-pv"><span>Tubing</span><small>kPa</small><b data-pv="tubing">—</b></div>
+        <div class="plg-pv"><span>Line</span><small>kPa</small><b data-pv="line">—</b></div>
+        <div class="plg-pv"><span>Gas flow</span><small>E3m3/d</small><b data-pv="flow">—</b></div>
+        <dl class="plg-facts"><dt>Critical flow</dt><dd data-f="cf">—</dd><dt>Load factor</dt><dd data-f="lf">—</dd><dt>Casing − line</dt><dd data-f="cl">—</dd><dt>ESD permissive</dt><dd data-f="esd">—</dd></dl>
+      </div>
+      <div class="plg-foot"></div>
+    </div>`;
+    const $ = (s) => el.querySelector(s);
+    let last = null, at = 0;
+    function render() {
+      const j = last; if (!j) return;
+      const pv = j.pv || {}, t = j.timers || {}, c = j.config || {}, pl = j.plunger || {};
+      const elapsedMin = j.running ? (Date.now() - at) / 60000 : 0;   // run the timers forward between messages
+      const open = !!j.valveOpen, known = j.valveKnown !== false;
+      const esdOk = j.esd !== false;
+      const banner = !j.running ? 'STOPPED' : !esdOk ? 'ESD' : !known ? 'VALVE ?' : open ? 'FLOWING' : 'SHUT IN';
+      const b = $('.plg-banner'); b.textContent = banner;
+      b.className = 'plg-banner ' + (!j.running ? 'stopped' : !esdOk ? 'esd' : open ? 'flowing' : 'shutin');
+      const msc = j.modeStatusCode;
+      $('.plg-stage').textContent = j.modeStatusText || MSC[msc] || '';
+      const onCycle = open;
+      const x = (onCycle ? t.timeOn : t.timeOff), y = onCycle ? c.timeOnSp : c.timeOffSp;
+      const xr = Number.isFinite(x) ? x + elapsedMin : x;
+      $('.plg-tlabel').textContent = onCycle ? 'Time on' : 'Time off';
+      $('.plg-t1').textContent = optFmt(xr, 1); $('.plg-t2').textContent = optFmt(y, 1);
+      const pct = y > 0 && Number.isFinite(xr) ? Math.max(0, Math.min(1, xr / y)) : 0;
+      $('.plg-bar i').style.width = pct * 100 + '%';
+      $('.plg-remain').textContent = y > 0 && Number.isFinite(xr) ? `${onCycle ? (msc === 2012 ? 'Afterflow' : 'Flow time') : 'Shut-in'} ${optFmt(Math.max(0, y - xr), 1)} min left` : '';
+      $('.plg-mode').textContent = `Mode ${j.mode ?? '—'} · ${j.modeName || ''}`;
+      $('.plg-err').textContent = j.errorCode ? `Error ${j.errorCode}: ${j.errorText || ''}` : 'No error';
+      $('.plg-err').classList.toggle('bad', !!j.errorCode);
+      for (const k of ['onTime', 'early', 'late', 'failed']) el.querySelector(`[data-k="${k}"]`).textContent = optFmt(pl[k]);
+      const trips = tripsOf(j);
+      const lt = trips[0];
+      $('.plg-trip').innerHTML = `${lt ? `Last trip <b>${optFmt(lt.trip, 1)} min</b> · <b>${optFmt(lt.velocity, 0)} m/min</b> &nbsp; ` : ''}Avg <b>${optFmt(pl.avgVelocity, 0)} m/min</b> · Target <b>${optFmt(c.targetVelocity, 0)} m/min</b>`;
+      for (const k of ['casing', 'tubing', 'line']) el.querySelector(`[data-pv="${k}"]`).textContent = optFmt(pv[k], 0);
+      el.querySelector('[data-pv="flow"]').textContent = optFmt(pv.flow, 2);
+      el.querySelector('[data-f="cf"]').textContent = `${optFmt(pv.criticalFlow, 2)} E3m3/d`;
+      el.querySelector('[data-f="lf"]').textContent = `${optFmt(pv.loadFactor, 0)} %`;
+      el.querySelector('[data-f="cl"]').textContent = `${optFmt(Number(pv.casing) - Number(pv.line), 0)} kPa`;
+      const esdEl = el.querySelector('[data-f="esd"]'); esdEl.textContent = esdOk ? 'OK' : 'TRIPPED'; esdEl.classList.toggle('bad', !esdOk);
+      // wellbore: valve colour and an approximate plunger position from the cycle (real wells have no position sensor)
+      $('.plg-valve').setAttribute('class', 'plg-valve ' + (!known ? '' : open ? 'open' : 'closed'));
+      $('.plg-vtext').textContent = !known ? '' : open ? 'OPEN' : 'CLOSED';
+      const depth = Number(c.wellDepth);
+      $('.plg-depth').textContent = Number.isFinite(depth) && depth > 0 ? `${optFmt(depth)} m` : '';
+      const pos = !j.running ? null : !open ? 330 : msc === 2012 ? 22 : 190;   // bottom / rising / at surface
+      const pg = $('.plg-plunger'), ptxt = $('.plg-ptext');
+      if (pos === null) { pg.style.display = 'none'; ptxt.textContent = ''; }
+      else { pg.style.display = ''; pg.setAttribute('transform', `translate(0 ${pos - 8})`); ptxt.setAttribute('y', pos < 60 ? 96 : pos + 4); ptxt.textContent = !open ? 'at bottom' : msc === 2012 ? '▲ at surface' : 'rising ▲'; }
+      const age = Math.round((Date.now() - at) / 1000);
+      $('.plg-foot').textContent = `${j.programVersion ? 'OPT ' + j.programVersion + ' · ' : ''}run ${j.run || 1} · updated ${age < 90 ? age + ' s' : Math.round(age / 60) + ' min'} ago${j.running ? ' · timers estimated between updates' : ''}`;
+    }
+    const tick = setInterval(render, 1000);
+    return {
+      onMessage(_t, raw) { try { last = JSON.parse(raw); at = last.epoch ? Math.min(Date.now(), last.epoch * 1000) : Date.now(); render(); } catch { /* not JSON */ } },
+      destroy() { clearInterval(tick); },
+    };
+  },
+};
+
+WIDGETS.opttrend = {
+  label: 'OPT trend', group: 'Process', size: [1000, 330],
+  defaults: { topic: '', hours: 6 },
+  fields: [{ key: 'topic', label: 'Optimizer status topic', type: 'topic', hint: 'riot/<id>/opt7/1' }, { key: 'hours', label: 'Hours', type: 'number' }],
+  topics: (p) => (p.topic ? [p.topic, ...['casing', 'tubing', 'line', 'valve', 'flow'].map((k) => `${p.topic}/${k}`)] : []),
+  create(el, p, api) {
+    el.innerHTML = `<div class="ot"><div class="ot-chart"><canvas></canvas></div>
+      <div class="ot-trips"><h4>Plunger trips</h4><table><thead><tr><th>Time</th><th>Trip min</th><th>m/min</th></tr></thead><tbody></tbody></table></div>
+      <div class="ot-legend"><span class="c1">Casing</span><span class="c2">Tubing</span><span class="c3">Line</span><span class="cv">Valve open</span><b class="ot-sum"></b></div></div>`;
+    const canvas = el.querySelector('canvas'), wrap = el.querySelector('.ot-chart');
+    const win = (Number(p.hours) || 6) * 3600e3;
+    const S = { casing: [], tubing: [], line: [], valve: [], flow: [] };
+    for (const k of Object.keys(S)) api.history(`${p.topic}/${k}`).then((pts) => { S[k] = pts.map((x) => ({ t: x.t, v: Number(x.v) })).filter((x) => Number.isFinite(x.v)).concat(S[k]); draw(); });
+    let raf = 0; const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+    const ro = new ResizeObserver(schedule); ro.observe(wrap);
+    const tick = setInterval(schedule, 30000);
+    function draw() {
+      const W = wrap.clientWidth, H = wrap.clientHeight, dpr = devicePixelRatio || 1; if (!W || !H) return;
+      canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+      const g = canvas.getContext('2d'); g.scale(dpr, dpr);
+      const css = getComputedStyle(document.documentElement), grid = css.getPropertyValue('--grid').trim(), muted = css.getPropertyValue('--muted').trim(), text = css.getPropertyValue('--text').trim();
+      const now = Date.now(), t0 = now - win, L = 48, R = 8, T = 18, B = 34, VB = 12;
+      const inWin = (a) => a.filter((d) => d.t >= t0 - 60e3);
+      let hi = -Infinity, lo = Infinity;
+      for (const k of ['casing', 'tubing', 'line']) for (const d of inWin(S[k])) { hi = Math.max(hi, d.v); lo = Math.min(lo, d.v); }
+      if (!Number.isFinite(hi)) { hi = 1000; lo = 0; }
+      const pad = Math.max(50, (hi - lo) * 0.08); hi += pad; lo = Math.max(0, lo - pad);
+      const X = (t) => L + ((t - t0) / win) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B - VB - 6);
+      g.font = '11px ui-sans-serif, system-ui'; g.lineWidth = 1;
+      g.fillStyle = muted; g.textAlign = 'right'; g.textBaseline = 'middle';
+      for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Math.round(Y(v)) + 0.5; g.strokeStyle = grid; g.setLineDash([2, 4]); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.setLineDash([]); g.fillText(Math.round(v), L - 6, y); }
+      g.save(); g.textAlign = 'left'; g.fillText('kPa', 4, 7); g.restore();
+      // valve-open bars
+      const vy = H - B - VB; g.strokeStyle = grid; g.strokeRect(L + 0.5, vy + 0.5, W - L - R - 1, VB);
+      const vs = inWin(S.valve); g.fillStyle = text;
+      for (let i = 0; i < vs.length; i++) if (vs[i].v > 0) { const a = Math.max(t0, vs[i].t), b = i + 1 < vs.length ? vs[i + 1].t : now; g.fillRect(X(a), vy + 3, Math.max(1, X(b) - X(a)), VB - 5); }
+      // time labels
+      g.fillStyle = muted; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+      const hrs = win / 3600e3;
+      for (let i = 6; i >= 0; i--) { const ago = win * i / 6, t = now - ago; g.fillText(!i ? 'now' : hrs >= 2 ? `-${+(ago / 3600e3).toFixed(1)}h` : `-${Math.round(ago / 60e3)}m`, Math.min(Math.max(X(t), L + 10), W - R - 12), H - B + 26); }
+      // lines
+      const line = (arr, dash, w) => { const a = inWin(arr); if (!a.length) return; g.strokeStyle = text; g.lineWidth = w; g.setLineDash(dash); g.beginPath(); a.forEach((d, i) => (i ? g.lineTo(X(Math.max(d.t, t0)), Y(d.v)) : g.moveTo(X(Math.max(d.t, t0)), Y(d.v)))); g.lineTo(X(now), Y(a[a.length - 1].v)); g.stroke(); g.setLineDash([]); };
+      g.save(); g.beginPath(); g.rect(L, T, W - L - R, vy - T - 4); g.clip();
+      line(S.line, [2, 3], 1.4); line(S.tubing, [7, 5], 1.8); line(S.casing, [], 2.2);
+      g.restore();
+      // summary: cycles (valve openings) and average flow
+      let cycles = 0; for (let i = 1; i < vs.length; i++) if (vs[i].v > 0 && !(vs[i - 1].v > 0) && vs[i].t >= t0) cycles++;
+      const fl = inWin(S.flow).filter((d) => d.t >= t0); const avg = fl.length ? fl.reduce((s, d) => s + d.v, 0) / fl.length : NaN;
+      el.querySelector('.ot-sum').textContent = `${cycles} cycle${cycles === 1 ? '' : 's'} in ${hrs >= 1 ? +hrs.toFixed(1) + ' h' : Math.round(hrs * 60) + ' min'} · avg flow ${Number.isFinite(avg) ? avg.toFixed(2) : '—'} E3m3/d`;
+    }
+    return {
+      onMessage(topic, raw) {
+        if (topic === p.topic) {
+          try {
+            const trips = tripsOf(JSON.parse(raw)).slice(0, 8);
+            el.querySelector('.ot-trips tbody').innerHTML = trips.length ? trips.map((t) => `<tr><td>${stampTime(t.stamp)}</td><td>${optFmt(t.trip, 1)}</td><td>${optFmt(t.velocity, 0)}</td></tr>`).join('') : '<tr><td colspan="3" class="ot-none">No trips yet</td></tr>';
+          } catch { /* ignore */ }
+          return;
+        }
+        const k = topic.slice(p.topic.length + 1), v = Number(raw);
+        if (S[k] && Number.isFinite(v)) { S[k].push({ t: Date.now(), v }); schedule(); }
+      },
+      destroy() { ro.disconnect(); clearInterval(tick); cancelAnimationFrame(raf); },
+    };
+  },
+};
+ICONS.plunger = I('<rect x="9" y="3" width="6" height="18" rx="1"/><rect x="10" y="12" width="4" height="4" fill="currentColor"/><path d="M15 6h6"/>');
+ICONS.opttrend = I('<path d="M3 16l4-8 3 5 3-4 3 6 5-9"/><path d="M3 20h4M10 20h4M17 20h4"/>');
+
 for (const [k, w] of Object.entries(WIDGETS)) { w.icon = ICONS[k]; if (w.frame === undefined) w.frame = true; }
 
 const PALETTE = ['#38bdf8', '#f472b6', '#a3e635', '#fbbf24', '#a78bfa', '#fb7185', '#2dd4bf', '#f97316'];

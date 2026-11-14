@@ -219,7 +219,7 @@ function applyLayout() {
       r.el.classList.toggle('m-hide', !!hide);
       r.el.classList.toggle('m-wide', w.w >= 300 || ['label', 'trend', 'log', 'slider', 'input', 'bar'].includes(w.type));
       const cap = ['trend', 'log'].includes(w.type) ? 300 : 240;
-      r.el.style.setProperty('--sh', Math.min(Math.max(w.h, 48), cap) + 'px');
+      r.el.style.setProperty('--sh', Math.min(Math.max(w.h, w.type === 'label' ? 20 : 48), cap) + 'px');
     });
   } else {
     for (const r of state.instances.values()) r.el.style.order = '';
@@ -233,7 +233,8 @@ function applyLayout() {
 function buildWidget(w) {
   const def = WIDGETS[w.type];
   const p = w.props;
-  const el = h('div', { class: `widget w-${w.type}${p.frame ? ' framed' : ''}${state.selected.has(w.id) ? ' selected' : ''}`, 'data-id': w.id });
+  const el = h('div', { class: `widget w-${w.type}${p.frame ? ' framed' : ''}${p.link ? ' has-link' : ''}${state.selected.has(w.id) ? ' selected' : ''}`, 'data-id': w.id });
+  if (p.link) el.addEventListener('click', () => { if (!state.edit) location.hash = '#/d/' + p.link; });
   placeEl(el, w);
   if (p.label && !def.noTitle) el.append(h('div', { class: 'w-title' }, p.label));
   const body = h('div', { class: 'w-body' });
@@ -449,6 +450,8 @@ function renderProps() {
   if (!def.noTitle) els.push(field('Title', h('input', { type: 'text', value: w.props.label || '', onchange: (e) => update('label', e.target.value) })));
   els.push(field('', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!w.props.frame, onchange: (e) => update('frame', e.target.checked) }), ' Show card frame')));
   for (const f of def.fields) els.push(propField(f, w, update));
+  els.push(field('Click opens dashboard', h('select', { onchange: (e) => update('link', e.target.value) },
+    h('option', { value: '' }, '— none —'), ...state.dashboards.filter((d) => d.id !== state.dash.id).map((d) => h('option', { value: d.id, selected: w.props.link === d.id }, d.name)))));
   els.push(h('h4', {}, 'Phone (list) view'),
     field('', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!w.props.mobileHide, onchange: (e) => update('mobileHide', e.target.checked, false) }), ' Hide in list view')),
     field('List order', h('input', { type: 'number', value: w.props.mobileOrder ?? '', placeholder: 'auto (top-to-bottom)', onchange: (e) => update('mobileOrder', e.target.value === '' ? '' : Number(e.target.value), false) }), 'Lower numbers come first; blank follows the canvas position.'));
@@ -638,7 +641,12 @@ function initUI() {
       renderGeometry(); sizeCanvas(); save();
     }
   });
-  window.addEventListener('hashchange', () => { const m = location.hash.match(/^#\/d\/(.+)$/); if (m && m[1] !== state.dash?.id) openDashboard(m[1]); });
+  window.addEventListener('hashchange', async () => {
+    const m = location.hash.match(/^#\/d\/(.+)$/);
+    if (!m || m[1] === state.dash?.id) return;
+    if (!state.dashboards.some((d) => d.id === m[1])) await loadDashboards();
+    openDashboard(m[1]);
+  });
   setInterval(renderExplorer, 500);
 }
 
@@ -656,4 +664,6 @@ function initUI() {
   await openDashboard(m ? m[1] : prefs.get('lastDash', null));
   connect();
   setInterval(seedTopics, 60000);
+  const pendingBadge = async () => { try { const i = await (await fetch('/api/info')).json(); const b = $('#riotsBadge'); if (b) { b.textContent = i.riotsPending || ''; b.hidden = !i.riotsPending; } } catch { /* ignore */ } };
+  pendingBadge(); setInterval(pendingBadge, 15000);
 })();

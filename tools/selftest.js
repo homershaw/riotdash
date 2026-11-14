@@ -118,9 +118,51 @@ function wsMqtt(headers, username, password) {
   const bad = await fetch(`http://127.0.0.1:${HTTP}/api/dashboards/..%2Fevil`, { method: 'PUT', body: '{}' });
   ok(!bad.ok, 'rejects path traversal in dashboard id');
 
+  const get = (p, headers = {}) => fetch(`http://127.0.0.1:${HTTP}${p}`, { headers });
+  // ---- RIOT controller discovery ----
+  const info = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'riot-info-s31-opt.json'), 'utf8'));
+  info.clientId = 'RiotP4-1C2904FFAB12';
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info), retain: true }));
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/status/online', payload: 'true', retain: true }));
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/telemetry', payload: JSON.stringify({ type: 'TELEMETRY', part: 1, parts: 1, tags: [{ name: 'M31.AI1', value: 52.5, quality: 'GOOD', eu: 'kPa' }, { name: 'M31.DI1', value: 1, quality: 'BAD', eu: '' }] }) }));
+  await sleep(300);
+  let rl = await (await get('/api/riots')).json();
+  let dev = rl.devices.find((d) => d.id === 'AB12');
+  ok(dev && dev.state === 'pending' && dev.tagCount === 27 && dev.mac === '1C:29:04:FF:AB:12', 'new controller waits for approval (27 tags, MAC from clientId)');
+  const tp = await (await get('/api/topics')).json();
+  ok(tp.some((t) => t.topic === 'riot/AB12/tag/M31.AI1' && t.payload === '52.5'), 'telemetry decoded to one topic per Tag');
+  ok(tp.some((t) => t.topic === 'riot/AB12/quality/M31.DI1' && t.payload === 'BAD'), 'Tag quality published');
+  const ap = await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB12/approve`, { method: 'POST', body: JSON.stringify({ name: 'Well AB' }) });
+  ok(ap.ok, 'approve');
+  const page = await (await get('/api/dashboards/riot-ab12')).json();
+  ok(page.name === 'Well AB' && page.widgets.some((w) => w.type === 'gauge' && w.props.topic === 'riot/AB12/tag/M31.AI2' && w.props.max === 5420), 'well page built from the description (gauge scaled to Tag range)');
+  ok((await get('/api/dashboards/riots')).status === 200, 'Riots overview built');
+  const pr = await fetch(`http://127.0.0.1:${HTTP}/api/riot-profiles/ESP32-S31-OPT`, { method: 'PUT', body: JSON.stringify({ labels: { 'M31.AI2': 'Tubing pressure' }, rebuild: true }) });
+  const prj = await pr.json();
+  const page2 = await (await get('/api/dashboards/riot-ab12')).json();
+  ok(prj.rebuilt === 1 && page2.widgets.some((w) => w.props.label === 'Tubing pressure'), 'model profile name applied to every controller of that model');
+  await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB12`, { method: 'PUT', body: JSON.stringify({ labels: { 'M31.AI2': 'Tubing (AB)' }, rebuild: true }) });
+  const page3 = await (await get('/api/dashboards/riot-ab12')).json();
+  ok(page3.widgets.some((w) => w.props.label === 'Tubing (AB)'), 'per-controller name overrides the profile');
+  // OPT 7.02 status → panels, trend values
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/opt7/1', retain: true, payload: JSON.stringify({ ok: true, running: true, mode: 8, modeName: 'Self Optimization Plunger', modeStatusCode: 2012, valveOpen: true, valveKnown: true, esd: true,
+    pv: { casing: 2392, tubing: 1715, line: 700, flow: 33.26 }, timers: { timeOn: 26.2 }, plunger: { onTime: 6, early: 0, late: 0, failed: 0, history: [{ trip: 8.3, stamp: 11070804, velocity: 241 }] }, config: { timeOnSp: 32.7, targetVelocity: 230 } }) }));
+  await sleep(300);
+  const tp2 = await (await get('/api/topics')).json();
+  ok(tp2.some((t) => t.topic === 'riot/AB12/opt7/1/casing' && t.payload === '2392') && tp2.some((t) => t.topic === 'riot/AB12/opt7/1/valve' && t.payload === '1'), 'optimizer status split out for the trend');
+  const page4 = await (await get('/api/dashboards/riot-ab12')).json();
+  ok(page4.widgets.some((w) => w.type === 'plunger' && w.props.topic === 'riot/AB12/opt7/1') && page4.widgets.some((w) => w.type === 'opttrend'), 'plunger lift panels added when optimizer data starts');
+  const ov = await (await get('/api/dashboards/riots')).json();
+  ok(ov.widgets.some((w) => w.props.topic === 'riot/AB12/opt7/1/valve'), 'overview tile shows FLOWING / SHUT IN');
+  const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
+  await sleep(200);
+  rl = await (await get('/api/riots')).json();
+  ok(rl.devices.find((d) => d.id === 'AB12').conflict, 'warns when two controllers share one ID');
+  ok((await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB12`, { method: 'DELETE' })).ok && (await get('/api/dashboards/riot-ab12')).status === 404, 'remove deletes the page');
+
   // ---- internet access (requests through Cloudflare carry cf-connecting-ip) ----
   const CF = { 'cf-connecting-ip': '203.0.113.9' };
-  const get = (p, headers = {}) => fetch(`http://127.0.0.1:${HTTP}${p}`, { headers });
   ok((await get('/')).status === 200, 'local browser needs no login');
   ok((await get('/', CF)).status === 503, 'internet access refused until a login exists');
   ok((await get('/healthz', CF)).status === 200, 'healthz stays open for tunnel checks');
