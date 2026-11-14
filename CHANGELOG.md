@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+The plunger lift panel now matches the controller's own Well Optimization page.
+- Critical flow shows the manual setpoint, marked *(manual)*, when the manual override is on. Otherwise it shows the calculated value.
+- When the M31 module is offline, the well valve shows **UNKNOWN** with a warning ("Valve feedback unknown (M31 offline)"), instead of CLOSED. The valve soft point reads 0 in that case. The FLOWING / SHUT IN banner then follows the optimizer's cycle.
+- A finished timer stays at its setpoint (for example, time off 10.0 of 10.0 during a Line Pressure High cycle) instead of counting past it.
+- The panel shows the program version (OPT 7.02.00).
+
 ## 0.7.2
 - Fix: OPT 7.02 wells showed STOPPED on the plunger lift panel while running. OPT 7.02 reports running as program status 1 (the OPT 5 port uses 3); both now count as running.
 - Fix: ESD showed as TRIPPED on wells without an ESD input. The ESD soft point reads 0 when no ESD is bound, so riotdash now judges ESD from the program error (117 well ESD, 116 invalid ESD input), the same as the optimizer. Program errors are shown by name.

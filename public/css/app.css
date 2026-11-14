@@ -334,6 +334,7 @@ body:not(.editing) .widget.has-link .w-body { pointer-events: none; }
 .plg-remain { font: 700 18px ui-monospace, Menlo, monospace; }
 .plg-mode, .plg-err { font-size: 12px; color: var(--muted); }
 .plg-err.bad, .plg-facts dd.bad { color: var(--alarm); font-weight: 700; }
+.plg-err.warn { color: var(--warn); font-weight: 600; }
 .plg-arr-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-top: 2px; }
 .plg-arr { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .plg-arr div { border: 1.5px solid var(--text); border-radius: 3px; text-align: center; padding: 2px 0; }
