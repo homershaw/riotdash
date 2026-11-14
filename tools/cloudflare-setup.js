@@ -16,6 +16,12 @@ const readline = require('readline');
 const { spawnSync } = require('child_process');
 const users = require('../server/users');
 
+
+// Prefer IPv4 for outgoing connections (GitHub updates, Cloudflare). On networks where DNS returns
+// IPv6 addresses but there's no working IPv6 route, Node otherwise stalls until it times out.
+try { require('dns').setDefaultResultOrder('ipv4first'); } catch { /* old Node */ }
+try { require('net').setDefaultAutoSelectFamily?.(true); } catch { /* old Node */ }
+
 const API = process.env.CLOUDFLARE_API_BASE || 'https://api.cloudflare.com/client/v4';
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -262,7 +268,9 @@ async function setupWithLogin(port) {
   if (fs.existsSync(credSrc)) fs.copyFileSync(credSrc, credDst);
   if (!fs.existsSync(credDst)) die(`Tunnel credentials not found (${credSrc}). If the tunnel was created on another machine, delete it in the Cloudflare dashboard or use --name newname.`);
   fs.chmodSync(credDst, 0o600);
-  const yml = `# Written by riotdash tools/cloudflare-setup.js\ntunnel: ${t.id}\ncredentials-file: ${credDst}\n\ningress:\n  - hostname: ${hostname}\n    service: http://localhost:${port}\n  - service: http_status:404\n`;
+  // HTTP/2 over TCP works on networks that block QUIC/UDP (common); IPv4 only when there's no public IPv6.
+  const hasPublicV6 = Object.values(os.networkInterfaces()).flat().some((a) => a && a.family === 'IPv6' && !a.internal && !/^fe80/i.test(a.address));
+  const yml = `# Written by riotdash tools/cloudflare-setup.js\ntunnel: ${t.id}\ncredentials-file: ${credDst}\nprotocol: http2\n${hasPublicV6 ? '' : 'edge-ip-version: "4"\n'}\ningress:\n  - hostname: ${hostname}\n    service: http://localhost:${port}\n  - service: http_status:404\n`;
   fs.writeFileSync(path.join(etc, 'config.yml'), yml);
   ok(`${etc}/config.yml: https://${hostname} → http://localhost:${port}`);
   const hasService = fs.existsSync('/etc/systemd/system/cloudflared.service') || run('systemctl', ['is-enabled', 'cloudflared'], true) !== null;
@@ -274,7 +282,19 @@ async function setupWithLogin(port) {
     if (!s2.ok) die('`cloudflared service install` failed:\n' + (s2.err || s2.out));
     ok('cloudflared service installed and started');
   }
+  if (await waitForConnection()) ok('tunnel connected to Cloudflare');
+  else warn('No tunnel connection yet. Check: sudo journalctl -u cloudflared -n 40 --no-pager');
   return hostname;
+}
+
+// Watch the service log for "Registered tunnel connection" (up to ~45 s).
+async function waitForConnection() {
+  for (let i = 0; i < 15; i++) {
+    const log = run('journalctl', ['-u', 'cloudflared', '--since', '-3min', '--no-pager', '-q'], true) || '';
+    if (/Registered tunnel connection/.test(log)) return true;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return false;
 }
 
 // ---------- main ----------

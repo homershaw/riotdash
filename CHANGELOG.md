@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3
+- Fix: "Updates" hanging and "fetch failed" on networks without working IPv6. riotdash now prefers IPv4 for outgoing connections (GitHub, Cloudflare).
+- Cloudflare setup writes `protocol: http2` to the tunnel config, so it works on networks that block QUIC/UDP. It also uses IPv4 for the tunnel when the machine has no public IPv6, and waits until the tunnel has actually connected before reporting success.
+
 ## 0.6.2
 - Cloudflare setup installs cloudflared from Cloudflare's apt/yum package repository (it then updates with the rest of the system), falling back to a curl/wget download. This fixes "Could not install cloudflared: fetch failed".
 - Clearer error messages when a download fails.
