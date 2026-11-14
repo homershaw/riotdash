@@ -6,6 +6,8 @@
 //   status/online   retained "true" / "false" (last will)
 //   telemetry       {"type":"TELEMETRY","part":k,"parts":n,"tags":[{"name","value","quality","eu"}…]}  (2 Tags per message)
 //   opt/SPTn        {"v":{"SPTn.p":value…}}       opt/meta/SPTn  {"points":{"SPTn.p":{"name","units","rw"}}}
+//   opt7/<run>      retained OPT 7.02 status (same JSON as the controller's /api/optimization): drives the
+//                   Plunger lift panel; casing/tubing/line/flow/valve are also split out for the 6 h trend.
 //
 // New controllers wait for approval. Telemetry of pending and approved controllers is decoded into one retained
 // topic per Tag so ordinary widgets, trends and the Explorer work on it:
@@ -57,7 +59,7 @@ class Riots {
     const id = parts[0], rest = parts.slice(1).join('/');
     if (!ID_RE.test(id) || !rest) return;
     // our own decoded output: ignore
-    if (rest.startsWith('tag/') || rest.startsWith('quality/') || rest.startsWith('meta/') || rest.startsWith('opt/v/')) return;
+    if (rest.startsWith('tag/') || rest.startsWith('quality/') || rest.startsWith('meta/') || rest.startsWith('opt/v/') || /^opt7\/\d+\/./.test(rest)) return;
     const text = m.payload.toString('utf8');
     if (rest === 'info') return this.onInfo(id, text);
     const d = this.db.devices[id];
@@ -71,6 +73,7 @@ class Riots {
     if (rest === 'telemetry') return this.onTelemetry(d, text);
     if (/^opt\/meta\/SPT\d+$/.test(rest)) return this.onOptMeta(d, text);
     if (/^opt\/SPT\d+$/.test(rest)) return this.onOpt(d, text);
+    if (/^opt7\/\d+$/.test(rest)) return this.onOpt7(d, Number(rest.split('/')[1]), text);
   }
 
   onInfo(id, text) {
@@ -127,6 +130,22 @@ class Riots {
     d.lastSeen = Date.now(); this.dirty = true;
   }
 
+  onOpt7(d, run, text) {
+    let j; try { j = JSON.parse(text); } catch { return; }
+    if (!j || typeof j !== 'object' || !j.pv) return;
+    const base = `${this.prefix}/${d.id}/opt7/${run}`;
+    const pv = j.pv || {};
+    const put = (k, v) => { if (v !== undefined && v !== null && v !== '') this.broker.publish(`${base}/${k}`, String(v), { retain: true, from: '$riot' }); };
+    put('casing', pv.casing); put('tubing', pv.tubing); put('line', pv.line); put('flow', pv.flow);
+    put('valve', j.valveKnown === false ? '' : j.valveOpen ? 1 : 0);
+    d.opt7 = d.opt7 || {};
+    const first = !d.opt7[run];
+    d.opt7[run] = { mode: j.mode, modeName: j.modeName, running: !!j.running, at: Date.now() };
+    d.lastSeen = Date.now(); this.dirty = true;
+    // A well that starts sending optimizer data after approval: add the panels once (no manual edits lost yet).
+    if (first && d.state === 'approved' && !d.optPanels) { d.optPanels = true; try { this.buildPage(d.id); this.buildOverview(); } catch { /* ignore */ } }
+  }
+
   // ---------- actions ----------
   list() {
     return Object.values(this.db.devices).sort((a, b) => a.id.localeCompare(b.id)).map((d) => ({
@@ -137,6 +156,7 @@ class Riots {
       io: d.info?.io, telemetry: d.info?.telemetry, tagCount: (d.info?.tags || []).length,
       tags: (d.info?.tags || []).map((t) => ({ name: t.name, label: t.label, units: t.units, type: t.type, source: t.source, writable: !!t.writable, telemetry: !!t.telemetry, range: t.range || null })),
       labels: d.labels || {}, opt: d.opt ? { program: d.opt.program, points: Object.keys(d.opt.points).length } : null,
+      opt7: d.opt7 ? Object.keys(d.opt7).map(Number) : [],
     }));
   }
 
@@ -191,6 +211,7 @@ class Riots {
   buildPage(id) {
     const d = this.device(id);
     if (!d || d.state !== 'approved' || !d.info) throw new Error('controller is not approved');
+    d.optPanels = pages.optRuns(d).length > 0;
     const dash = pages.wellPage(d, { prefix: this.prefix, labelFor: (t) => this.labelFor(d, t) });
     this.store.saveDashboard(pages.pageId(id), dash);
     return dash;

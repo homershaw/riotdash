@@ -144,6 +144,16 @@ function wsMqtt(headers, username, password) {
   await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB12`, { method: 'PUT', body: JSON.stringify({ labels: { 'M31.AI2': 'Tubing (AB)' }, rebuild: true }) });
   const page3 = await (await get('/api/dashboards/riot-ab12')).json();
   ok(page3.widgets.some((w) => w.props.label === 'Tubing (AB)'), 'per-controller name overrides the profile');
+  // OPT 7.02 status → panels, trend values
+  a.s.write(C.encodePublish({ topic: 'riot/AB12/opt7/1', retain: true, payload: JSON.stringify({ ok: true, running: true, mode: 8, modeName: 'Self Optimization Plunger', modeStatusCode: 2012, valveOpen: true, valveKnown: true, esd: true,
+    pv: { casing: 2392, tubing: 1715, line: 700, flow: 33.26 }, timers: { timeOn: 26.2 }, plunger: { onTime: 6, early: 0, late: 0, failed: 0, history: [{ trip: 8.3, stamp: 11070804, velocity: 241 }] }, config: { timeOnSp: 32.7, targetVelocity: 230 } }) }));
+  await sleep(300);
+  const tp2 = await (await get('/api/topics')).json();
+  ok(tp2.some((t) => t.topic === 'riot/AB12/opt7/1/casing' && t.payload === '2392') && tp2.some((t) => t.topic === 'riot/AB12/opt7/1/valve' && t.payload === '1'), 'optimizer status split out for the trend');
+  const page4 = await (await get('/api/dashboards/riot-ab12')).json();
+  ok(page4.widgets.some((w) => w.type === 'plunger' && w.props.topic === 'riot/AB12/opt7/1') && page4.widgets.some((w) => w.type === 'opttrend'), 'plunger lift panels added when optimizer data starts');
+  const ov = await (await get('/api/dashboards/riots')).json();
+  ok(ov.widgets.some((w) => w.props.topic === 'riot/AB12/opt7/1/valve'), 'overview tile shows FLOWING / SHUT IN');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);

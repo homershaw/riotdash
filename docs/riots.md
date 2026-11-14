@@ -26,6 +26,25 @@ When you save, tick **Rebuild the page(s) now** to apply the names. Rebuilding r
 
 The order is: per-controller name → model profile → the controller's own Tags-page label → the Tag name.
 
+## Plunger lift (OPT 7.02 wells)
+
+![Plunger lift panel](img/plunger.png)
+
+A well that sends optimizer data gets two panels at the top of its page, laid out like the controller's ePaper screen:
+
+- **Plunger lift:**
+  - the wellbore with the valve (green open, red closed) and the plunger's approximate place in the cycle. A real well has no position sensor, so it shows bottom, rising or at surface.
+  - **FLOWING / SHUT IN** (or STOPPED / ESD), the cycle (e.g. *Post Plunger Sales Cycle*), and the timer against its setpoint with a progress bar and the time left
+  - mode, error, plunger arrivals (on time, early, late, failed), the last trip, and average vs target velocity
+  - casing, tubing, line and gas flow, plus critical flow, load factor, casing − line and ESD permissive
+
+  Timers keep counting between messages, and the footer says when the last update arrived.
+- **Optimizer trend:** casing (solid), tubing (dashed) and line (dotted) over 6 hours, with valve-open bars underneath, the last plunger trips (time, minutes, m/min) and *N cycles in 6 h · avg flow*.
+
+On the **Riots** overview, the tile shows FLOWING / SHUT IN with gas flow and casing pressure.
+
+This needs controller firmware that publishes `riot/<id>/opt7/1` (homershaw/Riot branch `feature/s31-opt-mqtt`). On the controller's MQTT page, tick **Send Optimizer data**, set the interval (1 min suggested) and **Also send on a state change**. If a well starts sending optimizer data after it was approved, its page is rebuilt once to add the panels.
+
 ## The generated well page
 
 ![Well page](img/well.png)
@@ -60,6 +79,7 @@ All under the controller's base topic `riot/<id>` (`<id>`: 1–32 letters, digit
 | `info` | yes | Self-description (below). Sent on connect and when it changes. |
 | `status/online` | yes | `true` / `false`. Set `false` as the MQTT last will. |
 | `telemetry` | no | `{"type":"TELEMETRY","part":k,"parts":n,"tags":[{"name":"M31.AI1","value":52.3,"quality":"GOOD","eu":"kPa"},…]}`. Any number of Tags per part. |
+| `opt7/<run>` | yes | OPT 7.02 status: the same JSON as the controller's `/api/optimization?run=n`, plus `run` and `epoch`. Sent every interval and on a cycle, valve, error or plunger-trip change. |
 | `opt/meta/SPTn` | yes | `{"program":"5.00","points":{"SPTn.p":{"name":"…","units":"…","rw":1}}}` |
 | `opt/SPTn` | no | `{"v":{"SPTn.p":value,…}}` |
 
@@ -75,6 +95,7 @@ Decoded values are republished, retained, so widgets, trends and the Explorer ca
 | `riot/<id>/quality/<Tag name>` | its quality (`GOOD`, `BAD`, …), when it changes |
 | `riot/<id>/opt/v/SPTn.p` | Optimizer soft-point values |
 | `riot/<id>/meta/lastData` | time of the last telemetry |
+| `riot/<id>/opt7/<run>/casing`, `tubing`, `line`, `flow`, `valve` | optimizer values (valve 1/0), kept with history for the trend |
 
 ## Writing from the dashboard (proposal, not yet implemented)
 

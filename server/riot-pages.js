@@ -71,6 +71,14 @@ function wellPage(d, { prefix, labelFor }) {
   const bar = (t) => ({ type: 'bar', w: 280, h: 82, props: { label: labelFor(t), topic: topic(t), units: t.units, min: t.range ? t.range[0] : 0, max: t.range ? t.range[1] : 100, decimals: 1, color: '#a78bfa' } });
   const lamp = (t, color) => ({ type: 'lamp', w: 150, h: 105, props: { label: labelFor(t), topic: topic(t), onColor: color, offColor: '#334155' } });
 
+  // Plunger lift optimizer (OPT 7.02): its own panels first, one pair per run that reports
+  for (const run of optRuns(d)) {
+    const ot = `${base}/opt7/${run}`;
+    const suffix = optRuns(d).length > 1 ? ` · run ${run}` : '';
+    L.section('Plunger lift' + suffix, [{ type: 'plunger', w: WIDTH - 20, h: 430, props: { label: '', topic: ot } }]);
+    L.section('Optimizer trend (6 h)' + suffix, [{ type: 'opttrend', w: WIDTH - 20, h: 330, props: { label: '', topic: ot, hours: 6 } }]);
+  }
+
   L.section('Pressures', g.pressure.map(gauge));
   L.section('Measurements', g.analogIn.map(gauge));
   // Flow runs: rate first and bigger
@@ -97,6 +105,13 @@ function wellPage(d, { prefix, labelFor }) {
   };
 }
 
+// Optimizer runs a controller reports (opt7/<run> seen, or announced in its info topics)
+function optRuns(d) {
+  const runs = new Set(Object.keys(d.opt7 || {}).map(Number));
+  if (!runs.size && d.info && d.info.topics && d.info.topics.opt7) runs.add(1);
+  return [...runs].sort();
+}
+
 // Picks the most telling values for a tile: flow rate, then pressures, then anything analog.
 function keyTags(d) {
   const tags = (d.info && d.info.tags) || [];
@@ -116,11 +131,16 @@ function overviewPage(devices, { prefix, labelFor }) {
     add('label', x, y, TW, TH, { text: '', frame: true, link: pageId(d.id) });   // tile backdrop (hidden in list view)
     add('label', x + 14, y + 10, TW - 28, 34, { text: d.name || d.id, fontSize: 19, bold: true, link: pageId(d.id) });
     add('status', x + 8, y + 46, 140, 50, { topic: `${base}/status/online`, states: 'true=Online:#22c55e\nfalse=Offline:#ef4444' });
-    add('label', x + 160, y + 58, TW - 170, 22, { text: `${d.model || ''} · ${d.id}`, fontSize: 11, bold: false, color: '#8492a6' });
-    keyTags(d).forEach((t, k) => add('value', x + 10 + k * ((TW - 30) / 2 + 10), y + 104, (TW - 30) / 2, 96, { label: labelFor(d, t), topic: `${base}/tag/${t.name}`, units: t.units, decimals: 1, fontSize: 24, frame: true, link: pageId(d.id) }));
+    add('label', x + 160, y + 52, TW - 170, 20, { text: `${d.model || ''} · ${d.id}`, fontSize: 11, bold: false, color: '#8492a6' });
+    if (optRuns(d).length) add('status', x + 150, y + 70, 170, 34, { topic: `${base}/opt7/${optRuns(d)[0]}/valve`, states: '1=FLOWING:#22c55e\n0=SHUT IN:#f59e0b' });
+    const runs = optRuns(d), cw = (TW - 30) / 2;
+    const vals = runs.length
+      ? [{ label: 'Gas flow', topic: `${base}/opt7/${runs[0]}/flow`, units: 'E3m3/d', decimals: 2 }, { label: 'Casing', topic: `${base}/opt7/${runs[0]}/casing`, units: 'kPa', decimals: 0 }]
+      : keyTags(d).map((t) => ({ label: labelFor(d, t), topic: `${base}/tag/${t.name}`, units: t.units, decimals: 1 }));
+    vals.forEach((v, k) => add('value', x + 10 + k * (cw + 10), y + 110, cw, 92, { ...v, fontSize: 24, frame: true, link: pageId(d.id) }));
     add('label', x + 14, y + TH - 36, TW - 28, 24, { text: 'Open →', fontSize: 13, bold: true, color: '#38bdf8', link: pageId(d.id), align: 'right' });
   });
   return { name: 'Riots', settings: { grid: 10, width: 1420, height: Math.max(400, 110 + Math.ceil(devices.length / COLS) * (TH + 14)), generated: { by: 'riot', overview: true, at: Date.now() } }, widgets };
 }
 
-module.exports = { wellPage, overviewPage, pageId, OVERVIEW_ID, grouper };
+module.exports = { wellPage, overviewPage, pageId, OVERVIEW_ID, grouper, optRuns };

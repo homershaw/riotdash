@@ -4,6 +4,7 @@
 - **RIOT controllers are recognised automatically.** A controller publishing `riot/<id>/info` appears on the new **Riots** page as *waiting for approval*, with its model, firmware, MAC, I/O and a live preview.
 - **Approve to get a page.** riotdash builds the controller's page from its description (pressure gauges scaled to each Tag's range, flow, outputs, inputs, calculated values, 6-hour trends) and adds a tile to the **Riots** overview.
 - **Telemetry decoding.** The 2-Tag telemetry messages become one retained topic per Tag (`riot/<id>/tag/<name>`), with quality, plus Optimizer soft points. Trends and the Explorer work on them.
+- **Plunger lift panel and optimizer trend** for OPT 7.02 wells, modelled on the controller's ePaper screens. They're added automatically when a well sends `riot/<id>/opt7/1`. The overview tile shows FLOWING / SHUT IN with gas flow and casing.
 - **Friendly names** per model profile (once for every Optimization Well) and per controller.
 - **Clickable widgets.** Any widget can open another dashboard when tapped (*Click opens dashboard* in the editor).
 - `tools/riot-sim.js` simulates an ESP32-S31-OPT for testing.
