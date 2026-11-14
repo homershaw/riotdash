@@ -123,11 +123,29 @@ class Riots {
   onOpt(d, text) {
     let j; try { j = JSON.parse(text); } catch { return; }
     if (!j || typeof j.v !== 'object') return;
+    d.spt = d.spt || {};
     for (const [k, v] of Object.entries(j.v)) {
       if (!/^SPT\d+\.\d+$/.test(k)) continue;
+      d.spt[k] = v;
       this.broker.publish(`${this.prefix}/${d.id}/opt/v/${k}`, v === null ? '' : String(v), { retain: true, from: '$riot' });
     }
+    if (j.ts) d.sptTs = j.ts;
     d.lastSeen = Date.now(); this.dirty = true;
+    // Soft points arrive as one message per SPT: assemble the panel status once the burst is in.
+    clearTimeout(this.sptTimers?.[d.id]);
+    this.sptTimers = this.sptTimers || {};
+    this.sptTimers[d.id] = setTimeout(() => this.publishSptStatus(d), 400);
+  }
+
+  // Builds the same status object as the controller's /api/optimization from the OPT soft-point map
+  // (SCADAPack OPT register layout, firmware opt/OptRegisters.cpp) and publishes it on opt7/1.
+  publishSptStatus(d) {
+    const v = (k) => { const x = d.spt[k]; return x === null || x === undefined ? null : Number(x); };
+    if (v('SPT5.12') === null && v('SPT0.4') === null) return;   // nothing useful yet
+    const status = sptToStatus(v);
+    status.epoch = d.sptTs || Math.floor(Date.now() / 1000);
+    status.source = 'soft points';
+    this.broker.publish(`${this.prefix}/${d.id}/opt7/1`, JSON.stringify(status), { retain: true, from: '$riot' });
   }
 
   onOpt7(d, run, text) {
@@ -233,6 +251,34 @@ class Riots {
   pendingCount() { return Object.values(this.db.devices).filter((d) => d.state === 'pending' && d.info).length; }
 }
 
+const OPT_MODES = ['Invalid', 'Time On vs. Time Off', 'Critical Flow vs. Time Off', 'Critical Flow vs. CSD < SP', 'Critical Flow vs. CSD > SP',
+  'CSD < SP vs. Time Off', 'Critical Flow vs. Casing > SP', 'Critical Flow vs. Load Factor', 'Self Optimization Plunger'];
+const PROGRAM_STATUS = { 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
+// v(key) -> number|null for soft points "SPTn.p". Timers in the soft points count down (minutes remaining).
+function sptToStatus(v) {
+  const mode = v('SPT0.1'), ps = v('SPT1.1'), valve = v('SPT5.16'), depth = v('SPT0.9');
+  const onSp = v('SPT1.9'), offSp = v('SPT1.11'), onLeft = v('SPT5.18'), offLeft = v('SPT5.20');
+  const elapsed = (sp, left) => (sp === null || left === null ? null : Math.max(0, sp - left));
+  const history = [];
+  for (let i = 0; i < 10; i++) {
+    const stamp = v(`SPT4.${2 + i}`), trip = v(`SPT4.${12 + i}`);
+    if (trip > 0) history.push({ trip, stamp: stamp || 0, velocity: depth > 0 ? depth / trip : null });
+  }
+  const running = ps === 3;
+  return {
+    ok: true, running, mode, modeName: OPT_MODES[mode] || OPT_MODES[0],
+    programStatus: ps, banner: !running && (ps === 5 || ps === 7) ? 'SHUT IN' : undefined,
+    modeStatusCode: v('SPT4.1'), modeStatusText: running ? undefined : PROGRAM_STATUS[ps],
+    errorCode: v('SPT3.1') || 0, valveOpen: valve > 0, valveKnown: valve !== null, esd: v('SPT3.5') !== 0,
+    pv: { casing: v('SPT5.12'), tubing: v('SPT5.13'), line: v('SPT5.14'), flow: v('SPT0.4'), criticalFlow: v('SPT3.12'), casingTubingDp: v('SPT3.9'), loadFactor: v('SPT3.16') },
+    timers: { timeOn: elapsed(onSp, onLeft), timeOff: elapsed(offSp, offLeft), flowTime: v('SPT3.14'), shutInTime: v('SPT3.15') },
+    plunger: { onTime: v('SPT3.18'), early: v('SPT3.19'), late: v('SPT3.20'), failed: v('SPT3.21'), avgVelocity: v('SPT5.17'), history,
+      lastVelocity: v('SPT3.10'), lastDuration: v('SPT3.11') },
+    config: { timeOnSp: onSp, timeOffSp: offSp, targetVelocity: v('SPT2.12'), wellDepth: depth, mode: v('SPT0.7') },
+    run: 1,
+  };
+}
+
 function cleanLabels(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
@@ -243,4 +289,4 @@ function cleanLabels(obj) {
   return out;
 }
 
-module.exports = { Riots, macFromClientId };
+module.exports = { Riots, macFromClientId, sptToStatus };

@@ -43,7 +43,11 @@ A well that sends optimizer data gets two panels at the top of its page, laid ou
 
 On the **Riots** overview, the tile shows FLOWING / SHUT IN with gas flow and casing pressure.
 
-This needs controller firmware that publishes `riot/<id>/opt7/1` (homershaw/Riot branch `feature/s31-opt-mqtt`). On the controller's MQTT page, tick **Send Optimizer data**, set the interval (1 min suggested) and **Also send on a state change**. If a well starts sending optimizer data after it was approved, its page is rebuilt once to add the panels.
+This needs the controller to send its optimizer data, in either of two forms:
+- **soft points**: `riot/<id>/opt/SPT0`–`SPT5` (the SCADAPack OPT register map). riotdash assembles the panel from them.
+- **one status message**: `riot/<id>/opt7/1` (the controller's `/api/optimization` JSON).
+
+ On the controller's MQTT page, tick **Send Optimizer data**, set the interval (1 min suggested) and **Also send on a state change**. If a well starts sending optimizer data after it was approved, its page is rebuilt once to add the panels.
 
 ## The generated well page
 

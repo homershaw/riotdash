@@ -644,9 +644,9 @@ WIDGETS.plunger = {
       const elapsedMin = j.running ? (Date.now() - at) / 60000 : 0;   // run the timers forward between messages
       const open = !!j.valveOpen, known = j.valveKnown !== false;
       const esdOk = j.esd !== false;
-      const banner = !j.running ? 'STOPPED' : !esdOk ? 'ESD' : !known ? 'VALVE ?' : open ? 'FLOWING' : 'SHUT IN';
+      const banner = j.banner || (!j.running ? 'STOPPED' : !esdOk ? 'ESD' : !known ? 'VALVE ?' : open ? 'FLOWING' : 'SHUT IN');
       const b = $('.plg-banner'); b.textContent = banner;
-      b.className = 'plg-banner ' + (!j.running ? 'stopped' : !esdOk ? 'esd' : open ? 'flowing' : 'shutin');
+      b.className = 'plg-banner ' + (j.banner ? 'shutin' : !j.running ? 'stopped' : !esdOk ? 'esd' : open ? 'flowing' : 'shutin');
       const msc = j.modeStatusCode;
       $('.plg-stage').textContent = j.modeStatusText || MSC[msc] || '';
       const onCycle = open;
@@ -658,7 +658,7 @@ WIDGETS.plunger = {
       $('.plg-bar i').style.width = pct * 100 + '%';
       $('.plg-remain').textContent = y > 0 && Number.isFinite(xr) ? `${onCycle ? (msc === 2012 ? 'Afterflow' : 'Flow time') : 'Shut-in'} ${optFmt(Math.max(0, y - xr), 1)} min left` : '';
       $('.plg-mode').textContent = `Mode ${j.mode ?? '—'} · ${j.modeName || ''}`;
-      $('.plg-err').textContent = j.errorCode ? `Error ${j.errorCode}: ${j.errorText || ''}` : 'No error';
+      $('.plg-err').textContent = j.errorCode ? `Error ${j.errorCode}${j.errorText ? ': ' + j.errorText : ''}` : 'No error';
       $('.plg-err').classList.toggle('bad', !!j.errorCode);
       for (const k of ['onTime', 'early', 'late', 'failed']) el.querySelector(`[data-k="${k}"]`).textContent = optFmt(pl[k]);
       const trips = tripsOf(j);

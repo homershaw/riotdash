@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- The plunger lift panel and optimizer trend also work with controllers that send the optimizer as soft points (`riot/<id>/opt/SPT0`–`SPT5`, the SCADAPack OPT register map). riotdash assembles the panel from them: the timers count down in the soft points and are shown as elapsed against their setpoint, and plunger trips come from SPT4. Program status 5 (fast plunger) and 7 (line pressure high) show as SHUT IN with the reason.
+
 ## 0.7.0
 - **RIOT controllers are recognised automatically.** A controller publishing `riot/<id>/info` appears on the new **Riots** page as *waiting for approval*, with its model, firmware, MAC, I/O and a live preview.
 - **Approve to get a page.** riotdash builds the controller's page from its description (pressure gauges scaled to each Tag's range, flow, outputs, inputs, calculated values, 6-hour trends) and adds a tile to the **Riots** overview.
