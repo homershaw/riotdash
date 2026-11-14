@@ -130,6 +130,7 @@ class Session {
     clearTimeout(this.connectTimer);
     this.clientId = clientId;
     this.username = username;
+    this.verified = needAuth;   // the username was checked (MQTT auth on, or a login through Cloudflare)
     this.connected = true;
     this.connectedAt = Date.now();
     this.msgsIn = 0;
@@ -247,7 +248,7 @@ class Broker extends EventEmitter {
     const rc = this.config.riot || {};
     if (rc.protectSetTopics !== false && C.topicMatches(`${rc.prefix || 'riot'}/+/opt/#`, topic) && /\/opt\/(run\d+\/)?set$/.test(topic)) {
       const user = (auth.users || []).find((u) => u.username === session.username);
-      return !!(auth.enabled && user && Array.isArray(user.publish) && user.publish.some((f) => f !== '#' && C.topicMatches(f, topic)));
+      return !!(session.verified && user && Array.isArray(user.publish) && user.publish.some((f) => f !== '#' && C.topicMatches(f, topic)));
     }
     if (!auth.enabled) return true;
     const user = (auth.users || []).find((u) => u.username === session.username);

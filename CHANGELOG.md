@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.1
+- A user whose `publish` ACL names `riot/<id>/opt/set` can now publish it after logging in through Cloudflare, even with MQTT auth off on your network. Before, the ACL only counted when `auth.enabled` was on.
+
 ## 0.8.0
 - **Change optimizer settings from the dashboard.** The Plunger lift panel has a **⚙ Settings** button: start or stop the optimizer, and change any R/W soft point (setpoints, mode, tuning limits). riotdash confirms the change with you, sends it to the controller (`riot/<id>/opt/set`), and shows the controller's answer: applied, or why it was refused. Writes must also be turned on at the controller. See [Changing optimizer settings](docs/riots.md#changing-optimizer-settings).
 - Every change is logged (who, old → new, result) and listed under **Recent changes**.
