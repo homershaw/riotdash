@@ -91,6 +91,7 @@ To add Cloudflare's own login (email one-time PIN, Google, etc.) in front of the
 | Browser keeps asking for the password | Wrong username/password. Check with `node server/index.js list-users` and reset with `add-user` (same name, new password). |
 | `The API token needs: …` | Edit the token in Cloudflare and add the permission it names |
 | Site doesn't answer | Wait a few minutes for DNS, then check `sudo systemctl status cloudflared` and that riotdash is running |
+| `cloudflared service install` fails with *a timeout was exceeded* | cloudflared can't connect. Make sure `/etc/cloudflared/config.yml` has `protocol: http2` (setup ≥ 0.6.3 adds it), check that outbound **TCP 7844** is allowed, then `sudo systemctl restart cloudflared`. Look for `Registered tunnel connection` in `sudo journalctl -u cloudflared -n 30`. |
 | `Run this with sudo` | Use `./deploy/cloudflare/setup.sh`; it runs sudo for you |
 | *Could not install cloudflared* | Install it by hand (Debian/Ubuntu below), then run the setup again; it skips the install once `cloudflared` is present. |
 | *Permission denied* running `./deploy/…/setup.sh` | Run it as `bash deploy/cloudflare/setup.sh …` (versions up to 0.6.0 lost the executable flag on update; fixed in 0.6.1). |
