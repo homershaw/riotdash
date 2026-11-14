@@ -11,5 +11,6 @@
   "historyPoints": 2000,
   "sysTopics": true,
   "updates": { "github": "homershaw/riotdash", "channel": "main" },
+  "riot": { "prefix": "riot", "allowWrites": true, "protectSetTopics": true, "writeTimeoutMs": 15000 },
   "remote": { "requireLogin": true }
 }

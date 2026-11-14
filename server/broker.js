@@ -242,6 +242,13 @@ class Broker extends EventEmitter {
   // Optional per-user ACL: config.auth.users[].publish = ["filter", ...]
   canPublish(session, topic) {
     const auth = this.config.auth || {};
+    // RIOT optimizer writes go through riotdash (logged, login checked). Other clients may publish them only
+    // when their publish ACL names the topic explicitly.
+    const rc = this.config.riot || {};
+    if (rc.protectSetTopics !== false && C.topicMatches(`${rc.prefix || 'riot'}/+/opt/#`, topic) && /\/opt\/(run\d+\/)?set$/.test(topic)) {
+      const user = (auth.users || []).find((u) => u.username === session.username);
+      return !!(auth.enabled && user && Array.isArray(user.publish) && user.publish.some((f) => f !== '#' && C.topicMatches(f, topic)));
+    }
     if (!auth.enabled) return true;
     const user = (auth.users || []).find((u) => u.username === session.username);
     if (!user || !Array.isArray(user.publish)) return true;

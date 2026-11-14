@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+- **Change optimizer settings from the dashboard.** The Plunger lift panel has a **⚙ Settings** button: start or stop the optimizer, and change any R/W soft point (setpoints, mode, tuning limits). riotdash confirms the change with you, sends it to the controller (`riot/<id>/opt/set`), and shows the controller's answer: applied, or why it was refused. Writes must also be turned on at the controller. See [Changing optimizer settings](docs/riots.md#changing-optimizer-settings).
+- Every change is logged (who, old → new, result) and listed under **Recent changes**.
+- From the internet only logged-in users can change settings. Other MQTT clients can't publish `riot/+/opt/set` directly unless their ACL allows it. New `config.json` options: `riot.allowWrites`, `riot.protectSetTopics`, `riot.writeTimeoutMs`.
+- A second optimizer run (`riot/<id>/opt/run2/…`) gets its own Plunger lift panel and trend.
+
 ## 0.7.3
 The plunger lift panel now matches the controller's own Well Optimization page.
 - Critical flow shows the manual setpoint, marked *(manual)*, when the manual override is on. Otherwise it shows the calculated value.

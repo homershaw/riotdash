@@ -60,6 +60,9 @@ const DEFAULTS = {
   sysTopics: true,
   updates: { github: 'homershaw/riotdash', channel: 'main' },
   remote: { requireLogin: true },
+  // RIOT controllers. allowWrites: let riotdash change optimizer settings (the controller must allow it too).
+  // protectSetTopics: only riotdash itself may publish <prefix>/+/opt/set, unless a user's publish ACL names it.
+  riot: { prefix: 'riot', allowWrites: true, protectSetTopics: true, writeTimeoutMs: 15000 },
 };
 const configPath = process.env.MQTTDASH_CONFIG || path.join(ROOT, 'config.json');
 // First run: create config.json from the example so you have something to edit. Updates never touch it.
@@ -75,6 +78,7 @@ const config = {
   auth: { ...DEFAULTS.auth, ...(fileCfg.auth || {}) },
   updates: { ...DEFAULTS.updates, ...(fileCfg.updates || {}) },
   remote: { ...DEFAULTS.remote, ...(fileCfg.remote || {}) },
+  riot: { ...DEFAULTS.riot, ...(fileCfg.riot || {}) },
 };
 if (process.env.HTTP_PORT) config.http.port = Number(process.env.HTTP_PORT);
 if (process.env.MQTT_PORT) config.mqtt.port = Number(process.env.MQTT_PORT);
@@ -297,8 +301,26 @@ async function handleRiotApi(req, res, parts) {
     if (m === 'POST' && action === 'rebuild') { riots.buildPage(id); riots.buildOverview(); return json(res, 200, { ok: true }); }
     if (m === 'PUT' && !action) { const b = await body(); riots.update(id, b); if (b.rebuild) { riots.buildPage(id); riots.buildOverview(); } return json(res, 200, { ok: true }); }
     if (m === 'DELETE' && !action) { riots.forget(id); return json(res, 200, { ok: true }); }
+    // Optimizer settings: GET …/opt?run=1, POST …/opt/set {run, values:{"SPTn.p":v}}, GET …/writes
+    const run = Number(new URL(req.url, 'http://x').searchParams.get('run')) || 1;
+    if (m === 'GET' && action === 'opt' && !parts[4]) { const cw = canWrite(req); return json(res, 200, { ...riots.optState(id, run), writable: cw.ok, writeBlock: cw.reason || '' }); }
+    if (m === 'GET' && action === 'writes') return json(res, 200, riots.recentWrites(id, 100));
+    if (m === 'POST' && action === 'opt' && parts[4] === 'set') {
+      const cw = canWrite(req);
+      if (!cw.ok) return json(res, 403, { error: cw.reason });
+      const b = await body();
+      const who = req.authUser || `local ${String(req.socket.remoteAddress || '').replace(/^::ffff:/, '')}`;
+      return json(res, 200, await riots.writeOpt(id, b.run || run, b.values, who, config.riot.writeTimeoutMs));
+    }
     return json(res, 404, { error: 'not found' });
-  } catch (e) { return json(res, 400, { error: e.message }); }
+  } catch (e) { return json(res, e.status || 400, { error: e.message }); }
+}
+
+// Changing a controller needs: writes allowed in config.json, and a local request or a logged-in user.
+function canWrite(req) {
+  if (config.riot.allowWrites === false) return { ok: false, reason: 'Writing to controllers is turned off in riotdash (riot.allowWrites in config.json)' };
+  if (viaInternet(req) && !req.authUser) return { ok: false, reason: 'Log in to change controller settings from the internet' };
+  return { ok: true };
 }
 
 async function handleApi(req, res, url) {
@@ -434,6 +456,7 @@ fs.watchFile(configPath, { interval: 2000 }, () => {
     config.remote = { ...DEFAULTS.remote, ...(c.remote || {}) };
     config.http.basicAuth = (c.http || {}).basicAuth || null;
     config.updates = { ...DEFAULTS.updates, ...(c.updates || {}) };
+    Object.assign(config.riot, { allowWrites: DEFAULTS.riot.allowWrites, protectSetTopics: DEFAULTS.riot.protectSetTopics }, c.riot || {});
     loginCache.clear();
     console.log(`config.json reloaded (${(config.auth.users || []).length} user(s)). Port changes need a restart.`);
   } catch (e) { console.error('config.json has an error, keeping the previous settings:', e.message); }

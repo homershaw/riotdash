@@ -634,9 +634,18 @@ WIDGETS.plunger = {
         <div class="plg-pv"><span>Gas flow</span><small>E3m3/d</small><b data-pv="flow">—</b></div>
         <dl class="plg-facts"><dt>Critical flow</dt><dd data-f="cf">—</dd><dt>Load factor</dt><dd data-f="lf">—</dd><dt>Casing − line</dt><dd data-f="cl">—</dd><dt>ESD permissive</dt><dd data-f="esd">—</dd></dl>
       </div>
-      <div class="plg-foot"></div>
+      <div class="plg-foot"><span class="plg-ftext"></span><button type="button" class="plg-set" title="Change the optimizer's settings">⚙ Settings</button></div>
     </div>`;
     const $ = (s) => el.querySelector(s);
+    // riot/<id>/opt7/<run> → the settings dialog for that controller and run
+    const tm = /([^/]+)\/opt7\/(\d+)$/.exec(p.topic || '');
+    const setBtn = $('.plg-set');
+    if (!tm) setBtn.remove();
+    else setBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (el.closest('.editing')) return;
+      (await import('./optsettings.js')).openOptSettings(tm[1], Number(tm[2]));
+    });
     let last = null, at = 0;
     function render() {
       const j = last; if (!j) return;
@@ -682,7 +691,7 @@ WIDGETS.plunger = {
       if (pos === null) { pg.style.display = 'none'; ptxt.textContent = ''; }
       else { pg.style.display = ''; pg.setAttribute('transform', `translate(0 ${pos - 8})`); ptxt.setAttribute('y', pos < 60 ? 96 : pos + 4); ptxt.textContent = !open ? 'at bottom' : msc === 2012 ? '▲ at surface' : 'rising ▲'; }
       const age = Math.round((Date.now() - at) / 1000);
-      $('.plg-foot').textContent = `${j.programVersion ? 'OPT ' + j.programVersion + ' · ' : ''}run ${j.run || 1} · updated ${age < 90 ? age + ' s' : Math.round(age / 60) + ' min'} ago${j.running ? ' · timers estimated between updates' : ''}`;
+      $('.plg-ftext').textContent = `${j.programVersion ? 'OPT ' + j.programVersion + ' · ' : ''}run ${j.run || 1} · updated ${age < 90 ? age + ' s' : Math.round(age / 60) + ' min'} ago${j.running ? ' · timers estimated between updates' : ''}`;
     }
     const tick = setInterval(render, 1000);
     return {

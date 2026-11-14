@@ -28,7 +28,13 @@ Restart after editing: press Ctrl+C and start it again, or `sudo systemctl resta
   "historyPoints": 2000,      // messages kept per topic for trends and the Explorer
   "sysTopics": true,          // publish $SYS/broker/... statistics
   "updates": { "github": "homershaw/riotdash", "channel": "main" },   // see docs/updating.md
-  "remote": { "requireLogin": true }   // anything arriving through Cloudflare must log in (see docs/cloudflare.md)
+  "remote": { "requireLogin": true },  // anything arriving through Cloudflare must log in (see docs/cloudflare.md)
+  "riot": {                   // RIOT controllers (see docs/riots.md)
+    "prefix": "riot",
+    "allowWrites": true,      // false = never change controller settings from riotdash
+    "protectSetTopics": true, // only riotdash may publish riot/+/opt/set, unless a user's publish ACL names the topic
+    "writeTimeoutMs": 15000   // how long to wait for the controller's reply to a change
+  }
 }
 ```
 
