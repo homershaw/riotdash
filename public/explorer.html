@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Explorer · MQTT Dash</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/explorer.css">
+</head>
+<body class="explorer" data-pane="tree">
+  <header class="topbar">
+    <div class="brand"><img src="/favicon.svg" alt=""> <span>MQTT Dash</span></div>
+    <nav class="tabs">
+      <a href="/" class="tab">Dashboards</a>
+      <a href="/explorer" class="tab active">Explorer</a>
+    </nav>
+    <div class="stats">
+      <span title="Connected clients"><b id="stClients">–</b> clients</span>
+      <span title="Topics seen"><b id="stTopics">–</b> topics</span>
+      <span title="Retained messages"><b id="stRetained">–</b> retained</span>
+      <span title="Messages per second (seen by this page)"><b id="stRate">0</b> msg/s</span>
+      <span title="Broker uptime"><b id="stUptime">–</b> up</span>
+    </div>
+    <div class="spacer"></div>
+    <div id="conn" class="conn connecting"><i></i><span id="connText">Connecting…</span></div>
+    <button id="themeBtn" class="btn ghost" type="button" title="Toggle light/dark theme" style="font-size:13px">Theme</button>
+  </header>
+
+  <nav class="ex-mnav" aria-label="Sections">
+    <button type="button" data-pane="tree" class="active">Topics</button>
+    <button type="button" data-pane="detail">Details</button>
+    <button type="button" data-pane="pub">Publish</button>
+  </nav>
+
+  <div class="ex-main">
+    <aside class="ex-tree">
+      <div class="ex-tree-tools">
+        <input id="filter" type="search" placeholder="Filter topics…  (e.g. plant/  or  temp)">
+        <div class="ex-tree-btns">
+          <button id="expandAll" class="btn" type="button">Expand all</button>
+          <button id="collapseAll" class="btn" type="button">Collapse</button>
+          <label class="chk"><input id="showSys" type="checkbox"> $SYS</label>
+          <label class="chk" title="Stop updating the tree"><input id="pause" type="checkbox"> Pause</label>
+        </div>
+      </div>
+      <ul id="tree" class="tree" role="tree"></ul>
+    </aside>
+
+    <section class="ex-detail">
+      <div class="ex-subtabs">
+        <button class="subtab active" data-view="topic" type="button">Topic</button>
+        <button class="subtab" data-view="clients" type="button">Clients <span id="clientBadge" class="badge">0</span></button>
+      </div>
+
+      <div id="viewTopic" class="ex-view">
+        <div id="emptyTopic" class="ex-empty">
+          <h2>Select a topic</h2>
+          <p>Pick a topic in the tree to see its latest payload, history and recent messages. Use the publish box to send test messages.</p>
+        </div>
+        <div id="topicDetail" hidden>
+          <div class="td-head">
+            <button class="btn m-back" type="button" data-pane="tree" aria-label="Back to topics">‹</button>
+            <div class="td-path" id="tdPath"></div>
+            <button id="copyTopic" class="btn" type="button" title="Copy topic">Copy</button>
+            <button id="clearRetained" class="btn danger" type="button" title="Publish an empty retained message to clear it">Clear retained</button>
+          </div>
+          <div class="td-meta" id="tdMeta"></div>
+
+          <div class="card">
+            <div class="card-head">Latest payload
+              <span class="spacer"></span>
+              <label class="chk"><input id="rawToggle" type="checkbox"> raw</label>
+              <button id="copyPayload" class="btn sm" type="button">Copy</button>
+            </div>
+            <pre id="tdPayload" class="payload"></pre>
+          </div>
+
+          <div class="card" id="chartCard" hidden>
+            <div class="card-head">History <span id="chartFields" class="chips"></span>
+              <span class="spacer"></span>
+              <select id="chartWindow" aria-label="Window">
+                <option value="0" selected>All</option><option value="300">5 min</option><option value="900">15 min</option><option value="3600">1 h</option>
+              </select>
+            </div>
+            <div class="chart-wrap"><canvas id="chart"></canvas><div id="chartTip" class="chart-tip" hidden></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">Messages <small id="msgCount"></small></div>
+            <div class="msgs" id="msgs"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewClients" class="ex-view" hidden>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Client ID</th><th>User</th><th>Transport</th><th>Address</th><th>Connected</th><th>Msgs in</th><th>Subscriptions</th></tr></thead>
+          <tbody id="clients"></tbody>
+        </table></div>
+        <p class="hint">Client list comes from the built-in broker and refreshes every 5 seconds.</p>
+      </div>
+    </section>
+
+    <aside class="ex-pub">
+      <form id="pubForm" class="card">
+        <div class="card-head">Publish</div>
+        <label>Topic<input id="pubTopic" type="text" list="topicList" placeholder="home/livingroom/light/set"></label>
+        <label>Payload<textarea id="pubPayload" rows="6" placeholder='ON   or   {"temp": 21.5}'></textarea></label>
+        <div class="pub-opts">
+          <label>QoS<select id="pubQos"><option>0</option><option>1</option></select></label>
+          <label class="chk"><input id="pubRetain" type="checkbox"> Retain</label>
+          <button id="fmtJson" class="btn sm" type="button" title="Format JSON">{ }</button>
+        </div>
+        <button class="btn primary" type="submit">Publish</button>
+        <div class="card-head" style="margin-top:12px">Recent</div>
+        <div id="pubHistory" class="pub-history"></div>
+      </form>
+    </aside>
+  </div>
+
+  <datalist id="topicList"></datalist>
+  <div id="toasts"></div>
+  <script type="module" src="/js/explorer.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[Unit]
+Description=MQTT Dash - MQTT broker and dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mqttdash
+Group=mqttdash
+WorkingDirectory=/opt/mqtt-dash
+Environment=MQTTDASH_CONFIG=/etc/mqtt-dash/config.json
+Environment=MQTTDASH_DATA=/var/lib/mqtt-dash
+ExecStart=/usr/bin/env node /opt/mqtt-dash/server/index.js
+Restart=on-failure
+KillMode=mixed
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# /opt/mqtt-dash must be writable for in-app updates
+ReadWritePaths=/var/lib/mqtt-dash /opt/mqtt-dash
+
+[Install]
+WantedBy=multi-user.target

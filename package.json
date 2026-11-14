@@ -1,0 +1,16 @@
+{
+  "name": "mqtt-dash",
+  "version": "0.5.0",
+  "description": "Self-hosted MQTT broker with a drag-and-drop HMI/SCADA-style dashboard. Zero dependencies.",
+  "main": "server/index.js",
+  "bin": { "mqtt-dash": "server/index.js" },
+  "scripts": {
+    "start": "node server/index.js",
+    "sim": "node tools/simulator.js",
+    "demo": "node server/index.js & sleep 1 && node tools/simulator.js",
+    "hash-password": "node server/index.js hash-password",
+    "test": "node tools/selftest.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}

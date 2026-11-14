@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>MQTT Dash</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="/favicon.svg" alt=""> <span>MQTT Dash</span></div>
+    <button id="topicsToggle" class="btn ghost" type="button" title="Show/hide side panel">☰</button>
+    <select id="dashSelect" aria-label="Dashboard"></select>
+    <div class="tb-group edit-only">
+      <button id="newBtn" class="btn" type="button">New</button>
+      <button id="importBtn" class="btn" type="button">Import</button>
+      <button id="exportBtn" class="btn" type="button">Export</button>
+      <button id="delBtn" class="btn danger" type="button">Delete</button>
+      <input id="importFile" type="file" accept=".json,application/json" hidden>
+      <span id="saveState" class="save-state">Saved</span>
+    </div>
+    <div class="spacer"></div>
+    <select id="viewMode" class="view-mode" title="Layout: Auto picks List on phones and Fit on small screens" aria-label="Layout">
+      <option value="auto">Auto</option><option value="actual">Actual size</option><option value="fit">Fit to width</option><option value="stack">List</option>
+    </select>
+    <a class="btn ghost navlink" href="/explorer" title="MQTT explorer">Explorer</a>
+    <div id="conn" class="conn connecting"><i></i><span id="connText">Connecting…</span></div>
+    <button id="fullBtn" class="btn ghost" type="button" title="Full screen">⛶</button>
+    <button id="settingsBtn" class="btn ghost" type="button" title="Settings">⚙<i class="upd-dot" hidden></i></button>
+    <button id="editBtn" class="btn" type="button">Edit</button>
+  </header>
+
+  <div class="main">
+    <aside class="left">
+      <section class="edit-only">
+        <div class="panel-title">Widgets <small>drag onto canvas</small></div>
+        <div id="palette"></div>
+      </section>
+      <section class="topics-sec">
+        <div class="panel-title">Topics <span id="topicCount" class="badge">0</span></div>
+        <input id="topicFilter" type="search" placeholder="Filter topics…">
+        <div id="topics"></div>
+        <form id="pubForm" class="pub">
+          <div class="panel-title">Publish</div>
+          <input id="pubTopic" type="text" placeholder="topic" list="topicList">
+          <textarea id="pubPayload" rows="2" placeholder="payload"></textarea>
+          <div class="row"><label class="chk"><input id="pubRetain" type="checkbox"> retain</label><button class="btn primary" type="submit">Publish</button></div>
+        </form>
+      </section>
+    </aside>
+
+    <section id="stage" class="stage">
+      <div id="sizer" class="sizer"><div id="canvas" class="canvas"></div></div>
+    </section>
+
+    <aside id="props" class="props" hidden>
+      <div id="propsBody"></div>
+    </aside>
+  </div>
+
+  <datalist id="topicList"></datalist>
+  <div id="toasts"></div>
+
+  <dialog id="settingsDlg">
+    <form id="settingsForm" method="dialog">
+      <h2>Settings</h2>
+      <h4>Broker connection (this browser)</h4>
+      <label>WebSocket URL<input id="setUrl" type="text"></label>
+      <small>Leave blank to use the built-in broker on this server. Use wss://your-host/mqtt behind Cloudflare.</small>
+      <div class="row2">
+        <label>Username<input id="setUser" type="text" autocomplete="username"></label>
+        <label>Password<input id="setPass" type="password" autocomplete="current-password"></label>
+      </div>
+      <label class="chk"><input id="setAll" type="checkbox"> Subscribe to all topics (#) for the topic explorer</label>
+      <h4>Appearance</h4>
+      <label>Theme<select id="setTheme"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+      <h4>About</h4>
+      <div class="about-row"><span>MQTT Dash <b id="appVersion">v–</b> <span id="aboutUpd" class="about-upd"></span></span><button id="openUpdates" class="btn" type="button">Updates…</button></div>
+      <div class="dlg-actions"><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="save">Save &amp; reconnect</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="updateDlg" class="update-dlg">
+    <div class="upd">
+      <div class="upd-head"><h2>Updates</h2><button class="btn ghost" type="button" data-close aria-label="Close">✕</button></div>
+      <p class="upd-ver">Installed version: <b id="updCurrent">–</b></p>
+      <div id="updWarn" class="upd-warn" hidden></div>
+
+      <section id="updSetAdmin" hidden>
+        <h4>Create an admin password</h4>
+        <p class="hint">This password protects installing updates and rolling back. You only set it once.</p>
+        <div class="row2">
+          <label>Password<input id="admPw1" type="password" autocomplete="new-password" minlength="6"></label>
+          <label>Repeat<input id="admPw2" type="password" autocomplete="new-password"></label>
+        </div>
+        <button id="admSave" class="btn primary" type="button">Save password</button>
+      </section>
+      <section id="updNoAdmin" hidden>
+        <p class="hint">No admin password has been set yet. Open this page from a device on your local network (not through Cloudflare), or run on the server:<br><code>node server/index.js set-admin-password 'your-password'</code></p>
+      </section>
+
+      <section id="updInstall" hidden>
+        <h4>From GitHub <small id="ghSource" class="gh-src"></small></h4>
+        <div id="ghBox" class="gh-box">
+          <div id="ghStatus">Checking for updates…</div>
+          <pre id="ghNotes" class="gh-notes" hidden></pre>
+          <div class="gh-actions">
+            <button id="ghGo" class="btn primary" type="button" hidden>Update now</button>
+            <button id="ghCheck" class="btn" type="button">Check again</button>
+          </div>
+        </div>
+
+        <label>Admin password<input id="updPw" type="password" autocomplete="current-password"></label>
+        <div id="updStatus" class="upd-status" hidden></div>
+
+        <details class="upd-file">
+          <summary>Install from a file instead</summary>
+          <label id="updDrop" class="drop">
+            <input id="updFile" type="file" accept=".gz,.tgz,.tar,application/gzip" hidden>
+            <span id="updDropText"><b>Choose a riotdash .tar.gz</b> or drop it here</span>
+          </label>
+          <button id="updGo" class="btn" type="button" disabled>Install file &amp; restart</button>
+        </details>
+
+        <h4>Previous versions</h4>
+        <div id="updBackups" class="upd-backups"></div>
+        <p class="hint">Your config.json, dashboards and history are never changed by an update or a rollback.</p>
+      </section>
+    </div>
+  </dialog>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

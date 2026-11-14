@@ -1,0 +1,8 @@
+# runtime data and local settings — never commit
+data/
+config.json
+.backups/
+.update-staging/
+dist/
+node_modules/
+*.log

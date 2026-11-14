@@ -1,0 +1,14 @@
+{
+  "http": { "host": "0.0.0.0", "port": 8080, "basicAuth": null },
+  "mqtt": { "enabled": true, "host": "0.0.0.0", "port": 1883, "wsPath": "/mqtt" },
+  "auth": {
+    "enabled": false,
+    "users": [
+      { "username": "dashboard", "passwordHash": "scrypt$REPLACE_ME" }
+    ]
+  },
+  "dataDir": "./data",
+  "historyPoints": 2000,
+  "sysTopics": true,
+  "updates": { "github": "homershaw/riotdash", "channel": "main" }
+}
