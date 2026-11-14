@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4
+- `bash deploy/install-service.sh` runs riotdash as a system service straight from its folder. It starts at boot, restarts on crashes, and keeps your config and data where they are. `--uninstall` removes it.
+- A clear message instead of a crash when a port is already in use ("riotdash may already be running").
+
 ## 0.6.3
 - Fix: "Updates" hanging and "fetch failed" on networks without working IPv6. riotdash now prefers IPv4 for outgoing connections (GitHub, Cloudflare).
 - Cloudflare setup writes `protocol: http2` to the tunnel config, so it works on networks that block QUIC/UDP. It also uses IPv4 for the tunnel when the machine has no public IPv6, and waits until the tunnel has actually connected before reporting success.

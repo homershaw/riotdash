@@ -357,6 +357,21 @@ server.on('upgrade', (req, socket, head) => {
   if (ws) broker.attach(ws, 'ws', remote, { viaInternet: viaInternet(req) });
 });
 
+// Friendly message instead of a stack trace when a port is taken.
+function portError(what, port, envVar) {
+  return (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`\n✗ Port ${port} (${what}) is already in use — riotdash may already be running.`);
+      console.error('  Check:   pgrep -af "server/index.js"      or   systemctl status riotdash');
+      console.error(`  Or use another port: ${envVar}=<port> node server/index.js   (or change it in config.json)\n`);
+    } else if (e.code === 'EACCES') {
+      console.error(`\n✗ Not allowed to use port ${port} (${what}). Ports below 1024 need root — pick a higher one in config.json.\n`);
+    } else console.error(`\n✗ ${what} port ${port}: ${e.message}\n`);
+    process.exit(2);
+  };
+}
+server.on('error', portError('web / MQTT over WebSockets', config.http.port, 'HTTP_PORT'));
+
 server.listen(config.http.port, config.http.host, () => {
   console.log(`MQTT Dash UI       http://${config.http.host === '0.0.0.0' ? 'localhost' : config.http.host}:${config.http.port}/`);
   console.log(`MQTT over WS       ws://<host>:${config.http.port}${config.mqtt.wsPath}`);
@@ -369,6 +384,7 @@ if (config.mqtt.enabled) {
     sock.setNoDelay(true);
     broker.attach(sock, 'tcp', `${sock.remoteAddress}:${sock.remotePort}`);
   });
+  tcp.on('error', portError('MQTT', config.mqtt.port, 'MQTT_PORT'));
   tcp.listen(config.mqtt.port, config.mqtt.host, () => console.log(`MQTT broker (TCP)  mqtt://<host>:${config.mqtt.port}`));
 }
 console.log(`Data directory     ${dataDir}`);

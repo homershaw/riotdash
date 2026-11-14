@@ -21,6 +21,7 @@ git clone https://github.com/homershaw/riotdash.git
 cd riotdash
 node server/index.js          # broker + dashboard → http://localhost:8080
 node tools/simulator.js       # optional: demo plant data (second terminal)
+bash deploy/install-service.sh  # optional: run as a service that starts at boot
 ```
 
 ## Documentation
@@ -41,7 +42,7 @@ node tools/simulator.js       # optional: demo plant data (second terminal)
 server/   index.js (supervisor, HTTP, API) · updater.js · users.js · broker.js · codec.js · websocket.js · store.js · demo-dashboard.js
 public/   index.html · explorer.html · css/ · js/app.js (editor) · js/widgets.js · js/explorer.js · js/update.js · js/mqtt.js
 tools/    simulator.js · selftest.js · release.sh · cloudflare-setup.js
-deploy/   install.sh · systemd units · desktop launcher · cloudflare/setup.sh
+deploy/   install-service.sh · install.sh · systemd units · desktop launcher · cloudflare/setup.sh
 docs/     guides
 ```
 
