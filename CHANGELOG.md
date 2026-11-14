@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+- Cloudflare setup installs cloudflared from Cloudflare's apt/yum package repository (it then updates with the rest of the system), falling back to a curl/wget download. This fixes "Could not install cloudflared: fetch failed".
+- Clearer error messages when a download fails.
+
 ## 0.6.1
 - Fix: scripts such as `deploy/cloudflare/setup.sh` kept their "executable" permission after an in-app update. Updating to this version also fixes the scripts installed by the 0.6.0 update.
 
