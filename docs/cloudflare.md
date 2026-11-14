@@ -25,9 +25,31 @@ Once it's set up, you get:
 
 ## Automatic setup (recommended)
 
-### 1. Create an API token
+On the riotdash machine:
 
-On [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) choose **Create Token → Create Custom Token** and add these permissions:
+```bash
+cd ~/riotdash                     # wherever riotdash lives
+./deploy/cloudflare/setup.sh --hostname dash.yourdomain.com
+```
+
+It will:
+1. Ask you to choose a **login for internet access** (username and password), if you don't have one yet.
+2. Install `cloudflared` if needed.
+3. Show a **Cloudflare link**. Open it on any computer or phone, sign in, click your domain, then **Authorize**. The script continues by itself. You only do this once, and no API token is needed.
+4. Create (or reuse) a tunnel called **riotdash** and the DNS record for your address.
+5. Point the address at `http://localhost:<your port>`, start `cloudflared` as a service, and check that the site answers.
+
+It's safe to run again, for example after changing the port.
+
+| Option | Use |
+|---|---|
+| `--hostname dash.example.com` | The public address (otherwise it asks) |
+| `--name mytunnel` | Use a different tunnel name |
+| `--config /path/config.json` | Use a different riotdash config |
+
+### Using an API token instead
+
+If you'd rather not use the browser login (for scripted installs), create a custom API token at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
 
 | Type | Item | Permission |
 |---|---|---|
@@ -35,39 +57,11 @@ On [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/
 | Zone | DNS | Edit |
 | Zone | Zone | Read |
 
-> Older Cloudflare accounts call the first one **Cloudflare Tunnel**. **Cloudflare One Connectors → Edit** also works.
-
-Under **Zone Resources**, pick your domain (e.g. *anyesp.com*). Create the token and copy it. You'll paste it into the setup script.
-
-### 2. Run the setup on the riotdash machine
+Older accounts call the first one **Cloudflare Tunnel**; **Cloudflare One Connectors → Edit** also works. Limit **Zone Resources** to your domain, then run:
 
 ```bash
-cd ~/riotdash                     # wherever riotdash lives
-./deploy/cloudflare/setup.sh
+./deploy/cloudflare/setup.sh --token            # asks for the token (hidden, never saved)
 ```
-
-It asks for:
-1. **A login for internet access** (if you don't have one yet): username and password.
-2. **The API token.** Input is hidden, and the token is never saved or shown.
-3. **The public address.** The default is `dash.<your domain>`; press Enter to accept it.
-
-Then it automatically:
-- creates (or reuses) a tunnel called **riotdash**
-- points the address at `http://localhost:<your port>`
-- creates the DNS record
-- installs `cloudflared` and starts it as a service
-- checks that `https://<address>` answers
-
-It's safe to run again, for example after changing the port or to switch to a different address (`--hostname`).
-
-| Option | Use |
-|---|---|
-| `--hostname dash.example.com` | Skip the address question |
-| `--name mytunnel` | Use a different tunnel name |
-| `--config /path/config.json` | Use a different riotdash config |
-| `--skip-install` | Don't install or start `cloudflared` (no sudo needed) |
-
-You can also pass the token without typing it: `CLOUDFLARE_API_TOKEN=... ./deploy/cloudflare/setup.sh`.
 
 ### 3. Done
 

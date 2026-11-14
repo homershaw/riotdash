@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 // One-command Cloudflare Tunnel setup for riotdash.
-//   ./deploy/cloudflare/setup.sh            (asks for everything it needs)
-//   ./deploy/cloudflare/setup.sh --hostname dash.example.com
+//   ./deploy/cloudflare/setup.sh --hostname dash.example.com     (browser login, no API token)
+//   ./deploy/cloudflare/setup.sh --token                         (use a Cloudflare API token instead)
 //
 // It will: make sure a login exists for internet access, create (or reuse) a Cloudflare Tunnel,
 // point https://<hostname> at this machine, create the DNS record, install cloudflared and
@@ -107,45 +107,8 @@ async function installCloudflared() {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// ---------- main ----------
-(async () => {
-  console.log(c.b('\nriotdash · Cloudflare setup\n') + c.d('Publishes this dashboard and broker at https://<your hostname> through a Cloudflare Tunnel.'));
-  const skipInstall = flag('skip-install');
-  if (!skipInstall && process.getuid && process.getuid() !== 0) die('Run this with sudo so it can install cloudflared as a service:\n  ./deploy/cloudflare/setup.sh');
-
-  // 1. local settings
-  step('Checking this riotdash install');
-  const cfgPath = findConfig();
-  const cfg = users.readConfig(cfgPath);
-  const port = Number(process.env.HTTP_PORT || cfg.http?.port || 8080);
-  ok(`config: ${cfgPath}`);
-  ok(`dashboard port: ${port}`);
-  try {
-    const r = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(3000) });
-    if (r.ok) ok('riotdash is running'); else warn(`riotdash answered ${r.status} on port ${port}`);
-  } catch { warn(`riotdash isn't answering on port ${port} right now — that's fine, but start it before testing the site.`); }
-
-  // 2. a login for internet access
-  step('Login for access from the internet');
-  console.log(c.d('  Anything that comes in through Cloudflare must log in. Devices on your home network keep working as before.'));
-  let list = users.listUsers(cfgPath);
-  if (list.length) {
-    ok(`existing logins: ${list.map((u) => u.username).join(', ')}`);
-  } else {
-    const name = await ask('Choose a username', 'admin');
-    let pw = '', pw2 = ' ';
-    while (pw !== pw2) {
-      pw = await askHidden('Choose a password (8+ characters)');
-      if (pw.length < 8) { warn('Too short.'); pw2 = ' '; continue; }
-      pw2 = await askHidden('Repeat the password');
-      if (pw !== pw2) warn("Those didn't match, try again.");
-    }
-    users.addUser(cfgPath, name, pw);
-    ok(`login "${name}" saved (riotdash picks it up within a few seconds — no restart needed)`);
-  }
-  if (cfg.remote && cfg.remote.requireLogin === false) warn('remote.requireLogin is false in config.json — internet visitors would NOT need to log in. Set it to true.');
-
-  // 3. token
+async function setupWithToken(port, skipInstall) {
+  // token mode
   step('Cloudflare API token');
   TOKEN = process.env.CLOUDFLARE_API_TOKEN || '';
   if (!TOKEN) {
@@ -225,6 +188,127 @@ async function installCloudflared() {
     if (run('cloudflared', ['service', 'install', tunnelToken], true) === null) die('`cloudflared service install` failed. Check: sudo journalctl -u cloudflared');
     ok('cloudflared service installed and started');
   }
+
+  return hostname;
+}
+
+// ---------- browser-login mode (no API token) ----------
+// Uses `cloudflared tunnel login`: you open a link, pick your domain, done.
+function cfd(argsList, opts = {}) {
+  const r = spawnSync('cloudflared', argsList, { encoding: 'utf8', stdio: opts.inherit ? 'inherit' : 'pipe' });
+  return { ok: r.status === 0, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
+}
+
+async function setupWithLogin(port) {
+  step('cloudflared');
+  if (!which('cloudflared')) {
+    console.log(c.d('  installing cloudflared…'));
+    try { await installCloudflared(); } catch (e) { die('Could not install cloudflared: ' + e.message); }
+  }
+  ok('cloudflared ' + (cfd(['--version']).out.split('\n')[0] || '').replace(/^cloudflared version /, ''));
+
+  step('Log in to Cloudflare');
+  const home = os.homedir();
+  const cert = path.join(home, '.cloudflared', 'cert.pem');
+  if (fs.existsSync(cert)) ok('already logged in (' + cert + ')');
+  else {
+    console.log('  A link will appear below. Open it on any computer or phone, sign in to Cloudflare,');
+    console.log('  click ' + c.b('your domain') + ' (e.g. anyesp.com), then ' + c.b('Authorize') + '. This window continues by itself.\n');
+    const r = cfd(['tunnel', 'login'], { inherit: true });
+    if (!r.ok || !fs.existsSync(cert)) die('Cloudflare login did not finish. Run the setup again to retry.');
+    ok('logged in');
+  }
+
+  const hostname = (opt('hostname') || await ask('Public address for riotdash (e.g. dash.anyesp.com)')).toLowerCase();
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(hostname)) die(`"${hostname}" doesn't look like an address. Use something like dash.anyesp.com`);
+
+  step('Tunnel');
+  const name = opt('name', 'riotdash');
+  const listTunnels = () => { const r = cfd(['tunnel', 'list', '--output', 'json']); try { return JSON.parse(r.out || '[]') || []; } catch { return []; } };
+  let t = listTunnels().find((x) => x.name === name && !x.deleted_at);
+  if (t) ok(`reusing tunnel "${name}" (${t.id})`);
+  else {
+    const r = cfd(['tunnel', 'create', name]);
+    if (!r.ok) die('Creating the tunnel failed:\n' + (r.err || r.out));
+    t = listTunnels().find((x) => x.name === name);
+    if (!t) { const m = (r.out + r.err).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/); if (m) t = { id: m[0] }; }
+    if (!t) die('Tunnel was created but its ID could not be read. Run the setup again.');
+    ok(`created tunnel "${name}" (${t.id})`);
+  }
+
+  step('DNS');
+  let r = cfd(['tunnel', 'route', 'dns', name, hostname]);
+  if (!r.ok && /already exists|exist/i.test(r.err + r.out)) {
+    if (!await confirm(`${hostname} already has a DNS record. Point it at riotdash instead?`)) die('Stopped — pick a different address with --hostname.');
+    r = cfd(['tunnel', 'route', 'dns', '--overwrite-dns', name, hostname]);
+  }
+  if (!r.ok) die('Creating the DNS record failed:\n' + (r.err || r.out) + '\n(The address must be under the domain you picked when logging in.)');
+  ok(`${hostname} → tunnel`);
+
+  step('Running the tunnel as a service');
+  const etc = '/etc/cloudflared';
+  fs.mkdirSync(etc, { recursive: true });
+  const credSrc = path.join(home, '.cloudflared', `${t.id}.json`);
+  const credDst = path.join(etc, `${t.id}.json`);
+  if (fs.existsSync(credSrc)) fs.copyFileSync(credSrc, credDst);
+  if (!fs.existsSync(credDst)) die(`Tunnel credentials not found (${credSrc}). If the tunnel was created on another machine, delete it in the Cloudflare dashboard or use --name newname.`);
+  fs.chmodSync(credDst, 0o600);
+  const yml = `# Written by riotdash tools/cloudflare-setup.js\ntunnel: ${t.id}\ncredentials-file: ${credDst}\n\ningress:\n  - hostname: ${hostname}\n    service: http://localhost:${port}\n  - service: http_status:404\n`;
+  fs.writeFileSync(path.join(etc, 'config.yml'), yml);
+  ok(`${etc}/config.yml: https://${hostname} → http://localhost:${port}`);
+  const hasService = fs.existsSync('/etc/systemd/system/cloudflared.service') || run('systemctl', ['is-enabled', 'cloudflared'], true) !== null;
+  if (hasService) {
+    if (run('systemctl', ['restart', 'cloudflared'], true) === null) die('Restarting cloudflared failed. Check: sudo journalctl -u cloudflared');
+    ok('cloudflared service restarted with the new settings');
+  } else {
+    const s2 = cfd(['service', 'install']);
+    if (!s2.ok) die('`cloudflared service install` failed:\n' + (s2.err || s2.out));
+    ok('cloudflared service installed and started');
+  }
+  return hostname;
+}
+
+// ---------- main ----------
+(async () => {
+  console.log(c.b('\nriotdash · Cloudflare setup\n') + c.d('Publishes this dashboard and broker at https://<your hostname> through a Cloudflare Tunnel.'));
+  const skipInstall = flag('skip-install');
+  if (!skipInstall && process.getuid && process.getuid() !== 0) die('Run this with sudo so it can install cloudflared as a service:\n  ./deploy/cloudflare/setup.sh');
+
+  // 1. local settings
+  step('Checking this riotdash install');
+  const cfgPath = findConfig();
+  const cfg = users.readConfig(cfgPath);
+  const port = Number(process.env.HTTP_PORT || cfg.http?.port || 8080);
+  ok(`config: ${cfgPath}`);
+  ok(`dashboard port: ${port}`);
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) ok('riotdash is running'); else warn(`riotdash answered ${r.status} on port ${port}`);
+  } catch { warn(`riotdash isn't answering on port ${port} right now — that's fine, but start it before testing the site.`); }
+
+  // 2. a login for internet access
+  step('Login for access from the internet');
+  console.log(c.d('  Anything that comes in through Cloudflare must log in. Devices on your home network keep working as before.'));
+  let list = users.listUsers(cfgPath);
+  if (list.length) {
+    ok(`existing logins: ${list.map((u) => u.username).join(', ')}`);
+  } else {
+    const name = await ask('Choose a username', 'admin');
+    let pw = '', pw2 = ' ';
+    while (pw !== pw2) {
+      pw = await askHidden('Choose a password (8+ characters)');
+      if (pw.length < 8) { warn('Too short.'); pw2 = ' '; continue; }
+      pw2 = await askHidden('Repeat the password');
+      if (pw !== pw2) warn("Those didn't match, try again.");
+    }
+    users.addUser(cfgPath, name, pw);
+    ok(`login "${name}" saved (riotdash picks it up within a few seconds — no restart needed)`);
+  }
+  if (cfg.remote && cfg.remote.requireLogin === false) warn('remote.requireLogin is false in config.json — internet visitors would NOT need to log in. Set it to true.');
+
+  // 3. connect to Cloudflare: browser login (default) or API token
+  const useToken = !!process.env.CLOUDFLARE_API_TOKEN || flag('token');
+  const hostname = useToken ? await setupWithToken(port, skipInstall) : await setupWithLogin(port);
 
   // 8. check
   step('Checking https://' + hostname);
