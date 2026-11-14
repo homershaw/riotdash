@@ -7,7 +7,8 @@ const net = require('net');
 const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
-const { Broker, hashPassword } = require('./broker');
+const { Broker, hashPassword, verifyPassword } = require('./broker');
+const users = require('./users');
 const { acceptUpgrade } = require('./websocket');
 const { Store, safeId } = require('./store');
 const updater = require('./updater');
@@ -25,7 +26,7 @@ if (process.argv[2] === 'hash-password') {
 // ---------- supervisor ----------
 // The process you start is a tiny supervisor; the real server runs as a child so it can restart
 // itself after an in-app update (exit code 75) without systemd or a terminal noticing.
-const CLI = ['set-admin-password', 'update'].includes(process.argv[2]);
+const CLI = ['set-admin-password', 'update', 'add-user', 'remove-user', 'list-users'].includes(process.argv[2]);
 if (!process.env.MQTTDASH_WORKER && !CLI) {
   const { spawn } = require('child_process');
   let child, stopping = false;
@@ -51,6 +52,7 @@ const DEFAULTS = {
   historyPoints: 2000,
   sysTopics: true,
   updates: { github: 'homershaw/riotdash', channel: 'main' },
+  remote: { requireLogin: true },
 };
 const configPath = process.env.MQTTDASH_CONFIG || path.join(ROOT, 'config.json');
 // First run: create config.json from the example so you have something to edit. Updates never touch it.
@@ -65,10 +67,29 @@ const config = {
   mqtt: { ...DEFAULTS.mqtt, ...(fileCfg.mqtt || {}) },
   auth: { ...DEFAULTS.auth, ...(fileCfg.auth || {}) },
   updates: { ...DEFAULTS.updates, ...(fileCfg.updates || {}) },
+  remote: { ...DEFAULTS.remote, ...(fileCfg.remote || {}) },
 };
 if (process.env.HTTP_PORT) config.http.port = Number(process.env.HTTP_PORT);
 if (process.env.MQTT_PORT) config.mqtt.port = Number(process.env.MQTT_PORT);
 const dataDir = path.resolve(path.dirname(configPath), process.env.MQTTDASH_DATA || config.dataDir);
+
+// ---------- CLI: users ----------
+if (process.argv[2] === 'add-user') {
+  const [, , , name, pw, ...publish] = process.argv;
+  if (!name || !pw) { console.error('usage: node server/index.js add-user <username> <password> [allowed-publish-topic ...]'); process.exit(1); }
+  try { console.log(`User "${name}" ${users.addUser(configPath, name, pw, publish)} in ${configPath}.`); process.exit(0); } catch (e) { console.error(e.message); process.exit(1); }
+}
+if (process.argv[2] === 'remove-user') {
+  const name = process.argv[3];
+  if (!name) { console.error('usage: node server/index.js remove-user <username>'); process.exit(1); }
+  console.log(users.removeUser(configPath, name) ? `Removed "${name}".` : `No user "${name}".`); process.exit(0);
+}
+if (process.argv[2] === 'list-users') {
+  const list = users.listUsers(configPath);
+  if (!list.length) console.log('No users yet. Add one with: node server/index.js add-user <username> <password>');
+  for (const u of list) console.log(`${u.username}${u.publish ? '   (may publish to: ' + u.publish.join(', ') + ')' : ''}`);
+  process.exit(0);
+}
 
 // ---------- CLI: admin password & offline update ----------
 if (process.argv[2] === 'set-admin-password') {
@@ -196,16 +217,46 @@ async function handleUpdateApi(req, res, parts, url) {
   return json(res, 404, { error: 'not found' });
 }
 
-function checkBasicAuth(req) {
-  const ba = config.http.basicAuth;
-  if (!ba || !ba.username) return true;
+// Requests that come through Cloudflare carry these headers; nothing else can reach us from the internet
+// (no open ports), so they're a reliable "this is from the internet" signal.
+const viaInternet = (req) => !!(req.headers['cf-connecting-ip'] || req.headers['cf-ray']);
+
+function basicCreds(req) {
   const h = req.headers.authorization || '';
-  if (!h.startsWith('Basic ')) return false;
-  const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':');
-  const p = rest.join(':');
-  const a = crypto.createHash('sha256').update(`${u}:${p}`).digest();
-  const b = crypto.createHash('sha256').update(`${ba.username}:${ba.password}`).digest();
-  return crypto.timingSafeEqual(a, b);
+  if (!h.startsWith('Basic ')) return null;
+  const s = Buffer.from(h.slice(6), 'base64').toString('utf8');
+  const i = s.indexOf(':');
+  return i < 0 ? null : { user: s.slice(0, i), pass: s.slice(i + 1) };
+}
+
+const loginCache = new Map(); // sha256(user:pass) -> expiry (scrypt is slow; don't run it for every file)
+function userLogin(creds) {
+  if (!creds) return null;
+  const key = crypto.createHash('sha256').update(creds.user + '\0' + creds.pass).digest('hex');
+  const hit = loginCache.get(key);
+  if (hit && hit.exp > Date.now() && (config.auth.users || []).some((u) => u.username === hit.user)) return hit.user;
+  const u = (config.auth.users || []).find((x) => x.username === creds.user);
+  if (!u || !verifyPassword(u, creds.pass)) return null;
+  loginCache.set(key, { user: u.username, exp: Date.now() + 10 * 60e3 });
+  return u.username;
+}
+
+// Returns { ok, user, reason }
+function httpAuth(req) {
+  const creds = basicCreds(req);
+  const ba = config.http.basicAuth;
+  if (ba && ba.username) { // legacy: one fixed login for everyone
+    const a = crypto.createHash('sha256').update(`${creds?.user}:${creds?.pass}`).digest();
+    const b = crypto.createHash('sha256').update(`${ba.username}:${ba.password}`).digest();
+    if (!creds || !crypto.timingSafeEqual(a, b)) return { ok: false };
+  }
+  if (viaInternet(req) && config.remote.requireLogin) {
+    const real = (config.auth.users || []).filter((u) => !(u.passwordHash || '').includes('REPLACE_ME'));
+    if (!real.length) return { ok: false, reason: 'no-users' };
+    const user = userLogin(creds);
+    return user ? { ok: true, user } : { ok: false };
+  }
+  return { ok: true, user: null };
 }
 
 async function handleApi(req, res, url) {
@@ -213,6 +264,11 @@ async function handleApi(req, res, url) {
   const method = req.method;
 
   if (parts[1] === 'update') return handleUpdateApi(req, res, parts, url);
+  // MQTT credentials for a browser that logged in over the internet
+  if (parts[1] === 'session' && method === 'GET') {
+    if (!req.authUser) return json(res, 200, { username: null, internet: viaInternet(req) });
+    return json(res, 200, { username: req.authUser, password: 'session:' + broker.issueToken(req.authUser), internet: true });
+  }
   if (parts[1] === 'info' && method === 'GET') {
     return json(res, 200, {
       name: 'MQTT Dash', version: updater.appVersion(ROOT),
@@ -267,10 +323,16 @@ function serveStatic(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/healthz') return json(res, 200, { ok: true });
-  if (!checkBasicAuth(req)) {
-    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="MQTT Dash"' });
-    return res.end('Authentication required');
+  const auth = httpAuth(req);
+  if (!auth.ok) {
+    if (auth.reason === 'no-users') {
+      res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Remote access is not set up yet: add a login on the server with\n\n  node server/index.js add-user <username> <password>\n');
+    }
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="riotdash", charset="UTF-8"', 'Content-Type': 'text/plain' });
+    return res.end('Login required');
   }
+  req.authUser = auth.user;
   try {
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
     return serveStatic(req, res, url);
@@ -284,7 +346,7 @@ server.on('upgrade', (req, socket, head) => {
   if (url.pathname !== config.mqtt.wsPath) { socket.end('HTTP/1.1 404 Not Found\r\n\r\n'); return; }
   const remote = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || socket.remoteAddress;
   const ws = acceptUpgrade(req, socket, head);
-  if (ws) broker.attach(ws, 'ws', remote);
+  if (ws) broker.attach(ws, 'ws', remote, { viaInternet: viaInternet(req) });
 });
 
 server.listen(config.http.port, config.http.host, () => {
@@ -302,7 +364,20 @@ if (config.mqtt.enabled) {
   tcp.listen(config.mqtt.port, config.mqtt.host, () => console.log(`MQTT broker (TCP)  mqtt://<host>:${config.mqtt.port}`));
 }
 console.log(`Data directory     ${dataDir}`);
-console.log(`MQTT auth          ${config.auth.enabled ? 'enabled' : 'disabled (anonymous)'}`);
+console.log(`MQTT auth          ${config.auth.enabled ? 'enabled' : 'off on your network'}${config.remote.requireLogin ? ' · login required from the internet' : ''}`);
+
+// Pick up user/remote-login changes in config.json without a restart (e.g. after add-user).
+fs.watchFile(configPath, { interval: 2000 }, () => {
+  try {
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    config.auth = { ...DEFAULTS.auth, ...(c.auth || {}) };
+    config.remote = { ...DEFAULTS.remote, ...(c.remote || {}) };
+    config.http.basicAuth = (c.http || {}).basicAuth || null;
+    config.updates = { ...DEFAULTS.updates, ...(c.updates || {}) };
+    loginCache.clear();
+    console.log(`config.json reloaded (${(config.auth.users || []).length} user(s)). Port changes need a restart.`);
+  } catch (e) { console.error('config.json has an error, keeping the previous settings:', e.message); }
+}).unref?.();
 
 function saveState() {
   try { store.saveRetained(broker.retained); store.dirty = true; store.flushHistory(); } catch (e) { console.error(e); }

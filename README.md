@@ -10,7 +10,7 @@
 - **Explorer:** a live topic tree, a payload viewer with history charts, a publish box, and a list of connected clients.
 - **Updates in the app:** upload a new package and it installs, restarts and keeps a rollback copy. Your settings and data are never touched.
 - **No dependencies:** plain Node.js 18 or newer. No `npm install`.
-- **Cloudflare-ready:** the UI, API and MQTT-over-WSS all go through one port, so a single Cloudflare Tunnel publishes everything.
+- **Reach it from anywhere:** `./deploy/cloudflare/setup.sh` publishes the dashboard and MQTT (over WSS) through a Cloudflare Tunnel in one command. Internet visitors must log in, while your home network works as before.
 
 ![Dashboard](docs/img/dashboard.png)
 
@@ -32,16 +32,16 @@ node tools/simulator.js       # optional: demo plant data (second terminal)
 | [Explorer](docs/explorer.md) | Browsing topics, history, publishing, clients |
 | [Configuration](docs/configuration.md) | `config.json` reference, broker users and passwords |
 | [Updating](docs/updating.md) | In-app updates, admin password, rollback, building a release |
-| [Cloudflare](docs/cloudflare.md) | Publishing the dashboard and MQTT through a Cloudflare Tunnel |
+| [Cloudflare](docs/cloudflare.md) | One-command setup for internet access, logins, MQTT for remote devices |
 | [Changelog](CHANGELOG.md) | What changed in each version |
 
 ## Project layout
 
 ```
-server/   index.js (supervisor, HTTP, API) · updater.js · broker.js · codec.js · websocket.js · store.js · demo-dashboard.js
+server/   index.js (supervisor, HTTP, API) · updater.js · users.js · broker.js · codec.js · websocket.js · store.js · demo-dashboard.js
 public/   index.html · explorer.html · css/ · js/app.js (editor) · js/widgets.js · js/explorer.js · js/update.js · js/mqtt.js
-tools/    simulator.js · selftest.js · release.sh
-deploy/   install.sh · systemd units · desktop launcher · cloudflare/config.yml
+tools/    simulator.js · selftest.js · release.sh · cloudflare-setup.js
+deploy/   install.sh · systemd units · desktop launcher · cloudflare/setup.sh
 docs/     guides
 ```
 

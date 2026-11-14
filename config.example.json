@@ -10,5 +10,6 @@
   "dataDir": "./data",
   "historyPoints": 2000,
   "sysTopics": true,
-  "updates": { "github": "homershaw/riotdash", "channel": "main" }
+  "updates": { "github": "homershaw/riotdash", "channel": "main" },
+  "remote": { "requireLogin": true }
 }

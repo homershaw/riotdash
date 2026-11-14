@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+- One-command Cloudflare setup: `./deploy/cloudflare/setup.sh --hostname dash.example.com`. You log in to Cloudflare with a link (no API token needed); the script then creates the tunnel and DNS record, runs cloudflared as a service and checks the site. `--token` uses an API token instead.
+- Internet visitors must log in. Anything arriving through Cloudflare needs a riotdash username/password, for both the dashboard and MQTT. Your home network works as before.
+- Browsers that have logged in connect to MQTT automatically.
+- New commands: `add-user`, `list-users`, `remove-user`. Changes to config.json logins apply without a restart.
+
 ## 0.5.0
 - Updates from GitHub: Settings → Updates checks github.com/homershaw/riotdash and installs a new version with one click.
 - A new version is published by merging to `main` with a higher `version` in package.json.

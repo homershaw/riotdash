@@ -68,8 +68,10 @@ function ingest(topic, payload, { retain = false, qos = 0, ts = Date.now(), coun
 const conn = { url: prefs.get('url', ''), username: prefs.get('username', ''), password: prefs.get('password', '') };
 const defaultWsUrl = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/mqtt`;
 let client;
-function connect() {
-  client = new MqttClient({ url: conn.url || defaultWsUrl(), username: conn.username || undefined, password: conn.password || undefined, clientId: 'explorer-' + Math.random().toString(16).slice(2, 8) });
+async function connect() {
+  let sess = null;
+  if (!conn.username && !conn.url) { try { const s = await (await fetch('/api/session', { cache: 'no-store' })).json(); if (s.password) sess = s; } catch { /* local */ } }
+  client = new MqttClient({ url: conn.url || defaultWsUrl(), username: sess?.username || conn.username || undefined, password: sess?.password || conn.password || undefined, clientId: 'explorer-' + Math.random().toString(16).slice(2, 8) });
   client.addEventListener('state', (e) => {
     const { state, info } = e.detail;
     $('#conn').className = 'conn ' + state; $('#conn').title = info || state;
