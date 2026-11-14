@@ -88,6 +88,7 @@ tools/release.sh            # → dist/mqtt-dash-<version>.tar.gz from the curre
 | *Wrong admin password* | See [Admin password](#admin-password) to reset it. |
 | *Package has no package.json* | That isn't a riotdash package. Use the `.tar.gz`, not a `.zip`. |
 | *Couldn't check for updates / rate limit* | GitHub allows about 60 checks an hour without a login. The app caches checks for 30 minutes; wait and press **Check again**. |
+| Updates dialog hangs on *Checking…* or the update hangs | Usually broken IPv6 on the network (fixed in 0.6.3). On older versions, start riotdash with `NODE_OPTIONS=--dns-result-order=ipv4first node server/index.js`, then update. |
 | *Already up to date* | The version on GitHub isn't newer than what you run. |
 | *Nothing has been published to the main branch yet* | Merge the pull request that adds the app to `main`. |
 | Page doesn't come back after installing | Check the server log (`journalctl -u mqtt-dash -f` or the terminal), then roll back from the dialog or with the files in `.backups/`. |

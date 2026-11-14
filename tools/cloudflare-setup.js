@@ -16,6 +16,12 @@ const readline = require('readline');
 const { spawnSync } = require('child_process');
 const users = require('../server/users');
 
+
+// Prefer IPv4 for outgoing connections (GitHub updates, Cloudflare). On networks where DNS returns
+// IPv6 addresses but there's no working IPv6 route, Node otherwise stalls until it times out.
+try { require('dns').setDefaultResultOrder('ipv4first'); } catch { /* old Node */ }
+try { require('net').setDefaultAutoSelectFamily?.(true); } catch { /* old Node */ }
+
 const API = process.env.CLOUDFLARE_API_BASE || 'https://api.cloudflare.com/client/v4';
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);

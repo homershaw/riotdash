@@ -15,6 +15,12 @@ const updater = require('./updater');
 
 const ROOT = path.resolve(__dirname, '..');
 
+// Prefer IPv4 for outgoing connections (GitHub updates, Cloudflare). On networks where DNS returns
+// IPv6 addresses but there's no working IPv6 route, Node otherwise stalls until it times out.
+try { require('dns').setDefaultResultOrder('ipv4first'); } catch { /* old Node */ }
+try { require('net').setDefaultAutoSelectFamily?.(true); } catch { /* old Node */ }
+
+
 // ---------- CLI helpers ----------
 if (process.argv[2] === 'hash-password') {
   const pw = process.argv[3];
