@@ -22,6 +22,7 @@ function readTar(buf) {
     const hdr = buf.subarray(off, off + 512);
     if (hdr.every((b) => b === 0)) break;
     const size = parseInt(str(off + 124, 12).trim() || '0', 8);
+    const mode = parseInt(str(off + 100, 8).trim() || '644', 8) & 0o777;
     const type = String.fromCharCode(hdr[156] || 48);
     let name = str(off, 100);
     const prefix = str(off + 345, 155);
@@ -33,7 +34,7 @@ function readTar(buf) {
     if (type === 'g') continue;
     if (longName) { name = longName; longName = null; }
     if (paxPath) { name = paxPath; paxPath = null; }
-    if (type === '0' || type === '\0' || type === '7') out.push({ name, data: Buffer.from(data) });
+    if (type === '0' || type === '\0' || type === '7') out.push({ name, data: Buffer.from(data), mode });
   }
   return out;
 }
@@ -46,7 +47,7 @@ function normaliseEntries(entries) {
     if (parts.length > 1 && !MANAGED.includes(parts[0])) parts = parts.slice(1); // top-level folder
     if (!parts.length || parts.includes('..')) continue;
     if (!MANAGED.includes(parts[0])) continue;
-    files.push({ rel: parts.join('/'), data: e.data });
+    files.push({ rel: parts.join('/'), data: e.data, mode: e.mode });
   }
   return files;
 }
@@ -79,6 +80,9 @@ function stageUpdate(root, buf) {
     if (!dest.startsWith(staging + path.sep)) throw new Error('Unsafe path in package: ' + f.rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, f.data);
+    // keep scripts executable (setup.sh, install.sh, …); never anything beyond rwxr-xr-x
+    const exec = (f.mode & 0o111) || /\.sh$/.test(f.rel) || /^(server\/index|tools\/[\w-]+)\.js$/.test(f.rel);
+    fs.chmodSync(dest, exec ? 0o755 : 0o644);
   }
   // Syntax-check every server/tools file with the running Node before touching anything.
   for (const dir of ['server', 'tools']) {
@@ -228,4 +232,19 @@ async function downloadGithub(url) {
   return buf;
 }
 
-module.exports = { checkGithub, downloadGithub, cmpVer, applyUpdate, listBackups, rollback, isWritable, appVersion, adminIsSet, setAdminPassword, checkAdminPassword, isLocalRequest, readTar, MANAGED };
+// Make sure shell scripts are executable (older updaters didn't keep the flag). Safe to call any time.
+function fixScriptModes(root) {
+  const walk = (dir) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.sh$/.test(e.name)) { try { const m = fs.statSync(p).mode; if ((m & 0o111) === 0) fs.chmodSync(p, 0o755); } catch { /* read-only install */ } }
+    }
+  };
+  walk(path.join(root, 'deploy'));
+  walk(path.join(root, 'tools'));
+}
+
+module.exports = { fixScriptModes, checkGithub, downloadGithub, cmpVer, applyUpdate, listBackups, rollback, isWritable, appVersion, adminIsSet, setAdminPassword, checkAdminPassword, isLocalRequest, readTar, MANAGED };

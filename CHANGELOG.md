@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.1
+- Fix: scripts such as `deploy/cloudflare/setup.sh` kept their "executable" permission after an in-app update. Updating to this version also fixes the scripts installed by the 0.6.0 update.
+
 ## 0.6.0
 - One-command Cloudflare setup: `./deploy/cloudflare/setup.sh --hostname dash.example.com`. You log in to Cloudflare with a link (no API token needed); the script then creates the tunnel and DNS record, runs cloudflared as a service and checks the site. `--token` uses an API token instead.
 - Internet visitors must log in. Anything arriving through Cloudflare needs a riotdash username/password, for both the dashboard and MQTT. Your home network works as before.
