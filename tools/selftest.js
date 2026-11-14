@@ -155,8 +155,8 @@ function wsMqtt(headers, username, password) {
   const ov = await (await get('/api/dashboards/riots')).json();
   ok(ov.widgets.some((w) => w.props.topic === 'riot/AB12/opt7/1/valve'), 'overview tile shows FLOWING / SHUT IN');
   // OPT soft points (riot/<id>/opt/SPTn, as the S31 firmware sends them) → assembled panel status
-  const sp = { SPT0: { 'SPT0.1': 8, 'SPT0.4': 33.26, 'SPT0.7': 8, 'SPT0.9': 2000 }, SPT1: { 'SPT1.1': 3, 'SPT1.9': 32.7, 'SPT1.11': 60 }, SPT2: { 'SPT2.12': 230 },
-    SPT3: { 'SPT3.1': 0, 'SPT3.5': 1, 'SPT3.12': 14.16, 'SPT3.16': 41, 'SPT3.18': 6, 'SPT3.19': 0, 'SPT3.20': 0, 'SPT3.21': 0 },
+  const sp = { SPT0: { 'SPT0.1': 8, 'SPT0.4': 33.26, 'SPT0.7': 8, 'SPT0.9': 2000 }, SPT1: { 'SPT1.1': 1, 'SPT1.9': 32.7, 'SPT1.11': 60 }, SPT2: { 'SPT2.12': 230 },
+    SPT3: { 'SPT3.1': 0, 'SPT3.5': 0, 'SPT3.12': 14.16, 'SPT3.16': 41, 'SPT3.18': 6, 'SPT3.19': 0, 'SPT3.20': 0, 'SPT3.21': 0 },
     SPT4: { 'SPT4.1': 2012, 'SPT4.2': 11070804, 'SPT4.12': 8.3 }, SPT5: { 'SPT5.12': 2392, 'SPT5.13': 1715, 'SPT5.14': 700, 'SPT5.16': 1, 'SPT5.17': 239, 'SPT5.18': 6.5 } };
   for (const [k, v] of Object.entries(sp)) a.s.write(C.encodePublish({ topic: `riot/AB13/opt/${k}`, payload: JSON.stringify({ ts: 1794642403, seq: 8, trigger: 'interval', v }) }));
   a.s.write(C.encodePublish({ topic: 'riot/AB13/info', payload: JSON.stringify({ ...info, clientId: 'RiotP4-1C2904FFAB13' }), retain: true }));
@@ -165,8 +165,8 @@ function wsMqtt(headers, username, password) {
   await sleep(900);
   const tp3 = await (await get('/api/topics')).json();
   const st = JSON.parse((tp3.find((t) => t.topic === 'riot/AB13/opt7/1') || { payload: '{}' }).payload);
-  ok(st.running === true && st.valveOpen === true && st.pv?.casing === 2392 && st.modeStatusCode === 2012 && Math.abs(st.timers?.timeOn - 26.2) < 0.01 && st.plunger?.history?.[0]?.velocity > 240,
-    'optimizer soft points assembled into the plunger panel status (timer 32.7 - 6.5 left = 26.2)');
+  ok(st.running === true && st.esd === true && st.valveOpen === true && st.pv?.casing === 2392 && st.modeStatusCode === 2012 && Math.abs(st.timers?.timeOn - 26.2) < 0.01 && st.plunger?.history?.[0]?.velocity > 240,
+    'optimizer soft points assembled into the plunger panel status (timer 32.7 - 6.5 left = 26.2; unbound ESD not shown as tripped)');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);

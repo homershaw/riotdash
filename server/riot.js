@@ -253,7 +253,11 @@ class Riots {
 
 const OPT_MODES = ['Invalid', 'Time On vs. Time Off', 'Critical Flow vs. Time Off', 'Critical Flow vs. CSD < SP', 'Critical Flow vs. CSD > SP',
   'CSD < SP vs. Time Off', 'Critical Flow vs. Casing > SP', 'Critical Flow vs. Load Factor', 'Self Optimization Plunger'];
-const PROGRAM_STATUS = { 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
+// OPT 7.02 (C port): 0 stopped, 1 running. OPT 5 port: 2 inactive, 3 running, 5 fast plunger, 6 valve conflict, 7 line high.
+const PROGRAM_STATUS = { 0: 'Stopped', 1: 'Running', 2: 'Inactive', 3: 'Running', 5: 'Fast Plunger Shut In', 6: 'Valve Status Conflict', 7: 'Line Pressure High' };
+// Program error codes shared by OPT 7.02 (opt7/opt.h) and the OPT 5 port (WellOptCore.h).
+const OPT_ERRORS = { 111: 'Line pressure input', 112: 'Line pressure high', 114: 'Fast plunger shut-in', 115: 'Stopped by operator',
+  116: 'ESD input invalid', 117: 'Well ESD', 118: 'Start position', 119: 'Mode 8 needs a plunger', 120: 'Flow run' };
 // v(key) -> number|null for soft points "SPTn.p". Timers in the soft points count down (minutes remaining).
 function sptToStatus(v) {
   const mode = v('SPT0.1'), ps = v('SPT1.1'), valve = v('SPT5.16'), depth = v('SPT0.9');
@@ -264,12 +268,15 @@ function sptToStatus(v) {
     const stamp = v(`SPT4.${2 + i}`), trip = v(`SPT4.${12 + i}`);
     if (trip > 0) history.push({ trip, stamp: stamp || 0, velocity: depth > 0 ? depth / trip : null });
   }
-  const running = ps === 3;
+  const running = ps === 1 || ps === 3;
+  const err = v('SPT3.1') || 0;
   return {
     ok: true, running, mode, modeName: OPT_MODES[mode] || OPT_MODES[0],
     programStatus: ps, banner: !running && (ps === 5 || ps === 7) ? 'SHUT IN' : undefined,
     modeStatusCode: v('SPT4.1'), modeStatusText: running ? undefined : PROGRAM_STATUS[ps],
-    errorCode: v('SPT3.1') || 0, valveOpen: valve > 0, valveKnown: valve !== null, esd: v('SPT3.5') !== 0,
+    // ESD: judged from the program error (117 ESD, 116 invalid ESD input). The ESD soft point reads 0 when no ESD input is bound,
+    // while the optimizer itself treats an unbound ESD as permissive.
+    errorCode: err, errorText: OPT_ERRORS[err], valveOpen: valve > 0, valveKnown: valve !== null, esd: !(err === 116 || err === 117),
     pv: { casing: v('SPT5.12'), tubing: v('SPT5.13'), line: v('SPT5.14'), flow: v('SPT0.4'), criticalFlow: v('SPT3.12'), casingTubingDp: v('SPT3.9'), loadFactor: v('SPT3.16') },
     timers: { timeOn: elapsed(onSp, onLeft), timeOff: elapsed(offSp, offLeft), flowTime: v('SPT3.14'), shutInTime: v('SPT3.15') },
     plunger: { onTime: v('SPT3.18'), early: v('SPT3.19'), late: v('SPT3.20'), failed: v('SPT3.21'), avgVelocity: v('SPT5.17'), history,
