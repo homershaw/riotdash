@@ -92,5 +92,16 @@ To add Cloudflare's own login (email one-time PIN, Google, etc.) in front of the
 | `The API token needs: …` | Edit the token in Cloudflare and add the permission it names |
 | Site doesn't answer | Wait a few minutes for DNS, then check `sudo systemctl status cloudflared` and that riotdash is running |
 | `Run this with sudo` | Use `./deploy/cloudflare/setup.sh`; it runs sudo for you |
+| *Could not install cloudflared* | Install it by hand (Debian/Ubuntu below), then run the setup again; it skips the install once `cloudflared` is present. |
+| *Permission denied* running `./deploy/…/setup.sh` | Run it as `bash deploy/cloudflare/setup.sh …` (versions up to 0.6.0 lost the executable flag on update; fixed in 0.6.1). |
+
+Installing `cloudflared` by hand on Debian/Ubuntu:
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt-get update && sudo apt-get install cloudflared
+```
 
 > **Port forwarding:** don't also forward ports 8080/1883 on your router. Traffic that skips Cloudflare looks local to riotdash and wouldn't be asked to log in.

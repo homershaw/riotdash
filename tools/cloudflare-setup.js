@@ -81,30 +81,39 @@ function run(cmd, a, quiet) {
   return r.status === 0 ? (r.stdout || '').trim() : null;
 }
 
+// Install cloudflared. Prefers Cloudflare's apt/yum package repository (stays updated with the system);
+// falls back to downloading the binary with curl/wget, then Node.
 async function installCloudflared() {
-  const arch = { x64: 'amd64', arm64: 'arm64', arm: 'arm' }[os.arch()];
-  if (!arch) die(`No cloudflared build for ${os.arch()}. Install it by hand: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/`);
-  const base = 'https://github.com/cloudflare/cloudflared/releases/latest/download/';
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfd-'));
-  const get = async (name) => {
-    const r = await fetch(base + name, { signal: AbortSignal.timeout(180000) });
-    if (!r.ok) throw new Error(`download ${name}: HTTP ${r.status}`);
-    const f = path.join(tmp, name);
-    fs.writeFileSync(f, Buffer.from(await r.arrayBuffer()));
-    return f;
-  };
-  if (which('dpkg')) {
-    const f = await get(`cloudflared-linux-${arch}.deb`);
-    if (run('dpkg', ['-i', f]) === null) die('Installing cloudflared with dpkg failed (see above).');
-  } else if (which('rpm')) {
-    const f = await get(`cloudflared-linux-${{ amd64: 'x86_64', arm64: 'aarch64', arm: 'arm' }[arch]}.rpm`);
-    if (run('rpm', ['-Uvh', '--replacepkgs', f]) === null) die('Installing cloudflared with rpm failed (see above).');
-  } else {
-    const f = await get(`cloudflared-linux-${arch}`);
-    fs.copyFileSync(f, '/usr/local/bin/cloudflared');
-    fs.chmodSync('/usr/local/bin/cloudflared', 0o755);
+  const sh = (cmd) => spawnSync('sh', ['-c', cmd], { stdio: 'inherit' }).status === 0;
+  if (which('apt-get')) {
+    console.log(c.d("  using Cloudflare's apt repository…"));
+    const ok1 = sh('mkdir -p --mode=0755 /usr/share/keyrings && ' + fetchCmd('https://pkg.cloudflare.com/cloudflare-main.gpg', '/usr/share/keyrings/cloudflare-main.gpg'))
+      && sh('echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" > /etc/apt/sources.list.d/cloudflared.list')
+      && sh('apt-get update -qq && apt-get install -y cloudflared');
+    if (ok1 && which('cloudflared')) return;
+    warn('apt install did not work, trying a direct download…');
+  } else if (which('dnf') || which('yum')) {
+    const pm = which('dnf') ? 'dnf' : 'yum';
+    const ok1 = sh(fetchCmd('https://pkg.cloudflare.com/cloudflared.repo', '/etc/yum.repos.d/cloudflared.repo')) && sh(`${pm} install -y cloudflared`);
+    if (ok1 && which('cloudflared')) return;
+    warn(`${pm} install did not work, trying a direct download…`);
   }
-  fs.rmSync(tmp, { recursive: true, force: true });
+  const arch = { x64: 'amd64', arm64: 'arm64', arm: 'arm' }[os.arch()];
+  if (!arch) throw new Error(`no cloudflared build for ${os.arch()}`);
+  const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}`;
+  const dest = '/usr/local/bin/cloudflared';
+  if (which('curl') || which('wget')) {
+    if (!sh(fetchCmd(url, dest))) throw new Error(`could not download ${url}`);
+  } else {
+    let r;
+    try { r = await fetch(url, { signal: AbortSignal.timeout(180000) }); } catch (e) { throw new Error(`${e.message}${e.cause ? ' (' + (e.cause.code || e.cause.message) + ')' : ''} while downloading ${url}`); }
+    if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+    fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
+  }
+  fs.chmodSync(dest, 0o755);
+}
+function fetchCmd(url, dest) {
+  return which('curl') ? `curl -fsSL --retry 3 -o '${dest}' '${url}'` : `wget -q -O '${dest}' '${url}'`;
 }
 
 async function setupWithToken(port, skipInstall) {
