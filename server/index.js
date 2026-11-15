@@ -33,7 +33,7 @@ if (process.argv[2] === 'hash-password') {
 // ---------- supervisor ----------
 // The process you start is a tiny supervisor; the real server runs as a child so it can restart
 // itself after an in-app update (exit code 75) without systemd or a terminal noticing.
-const CLI = ['set-admin-password', 'update', 'add-user', 'remove-user', 'list-users'].includes(process.argv[2]);
+const CLI = ['set-admin-password', 'update', 'add-user', 'remove-user', 'list-users', 'import-cycles'].includes(process.argv[2]);
 if (!process.env.MQTTDASH_WORKER && !CLI) {
   const { spawn } = require('child_process');
   let child, stopping = false;
@@ -102,6 +102,19 @@ if (process.argv[2] === 'list-users') {
   process.exit(0);
 }
 
+// ---------- CLI: import plunger cycle history (docs/cycles.md) ----------
+if (process.argv[2] === 'import-cycles') {
+  const [, , , file, well] = process.argv;
+  if (!file) { console.error('usage: node server/index.js import-cycles <cycles.csv> [well name, if the CSV has no well column]'); process.exit(1); }
+  try {
+    const r = new (require('./cycles').Cycles)({ dir: dataDir, log: () => {} }).importCsv(fs.readFileSync(file, 'utf8'), { defaultWell: well });
+    for (const [w, x] of Object.entries(r.wells)) console.log(`${w}: ${x.added} cycles added${x.duplicates ? `, ${x.duplicates} already there` : ''}`);
+    for (const e of r.errors) console.log(`line ${e.line}: ${e.error}`);
+    if (r.errorCount > r.errors.length) console.log(`… ${r.errorCount - r.errors.length} more rows skipped`);
+    console.log(`${r.rows} rows read.`); process.exit(0);
+  } catch (e) { console.error('Import failed:', e.message); process.exit(1); }
+}
+
 // ---------- CLI: admin password & offline update ----------
 if (process.argv[2] === 'set-admin-password') {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -135,7 +148,8 @@ setInterval(() => {
 if (config.sysTopics) broker.startSysTopics();
 
 // RIOT controllers: discovery, approval and decoding (server/riot.js)
-const riots = new Riots({ broker, store, config, log: (...a) => broker.log(...a) });
+const cycles = new (require('./cycles').Cycles)({ dir: dataDir, log: (...a) => broker.log(...a) });
+const riots = new Riots({ broker, store, config, cycles, log: (...a) => broker.log(...a) });
 for (const [topic, m] of broker.retained) { try { riots.onMessage({ topic, payload: m.payload, retain: true }); } catch { /* ignore */ } }
 
 // Seed a demo dashboard the first time
@@ -316,6 +330,27 @@ async function handleRiotApi(req, res, parts) {
   } catch (e) { return json(res, e.status || 400, { error: e.message }); }
 }
 
+// Plunger cycle history: GET /api/cycles (wells), GET /api/cycles/<well>?days=30&tz=<minutes east of UTC>,
+// POST /api/cycles/import[?well=<name>] with the CSV as the body.
+async function handleCyclesApi(req, res, parts, url) {
+  try {
+    if (!parts[2] && req.method === 'GET') return json(res, 200, cycles.wells());
+    if (parts[2] === 'import' && req.method === 'POST') {
+      if (viaInternet(req) && !req.authUser) return json(res, 403, { error: 'Log in to import' });
+      const text = await readBody(req, 200 * 1024 * 1024);
+      return json(res, 200, cycles.importCsv(text, { defaultWell: url.searchParams.get('well') || undefined }));
+    }
+    if (parts[2] && req.method === 'GET') {
+      const well = decodeURIComponent(parts[2]), q = url.searchParams;
+      const days = Math.min(3650, Number(q.get('days')) || 30), tz = Number(q.get('tz')) || 0;
+      const since = Math.floor(Date.now() / 1000) - days * 86400;
+      const list = cycles.list(well, { since });
+      return json(res, 200, { well, daily: cycles.daily(well, { days, tzOffsetMin: tz }), cycles: list.slice(-Math.min(2000, Number(q.get('limit')) || 200)).reverse(), total: list.length });
+    }
+    return json(res, 404, { error: 'not found' });
+  } catch (e) { return json(res, 400, { error: e.message }); }
+}
+
 // Changing a controller needs: writes allowed in config.json, and a local request or a logged-in user.
 function canWrite(req) {
   if (config.riot.allowWrites === false) return { ok: false, reason: 'Writing to controllers is turned off in riotdash (riot.allowWrites in config.json)' };
@@ -342,6 +377,7 @@ async function handleApi(req, res, url) {
     });
   }
   if (parts[1] === 'riots' || parts[1] === 'riot-profiles') return handleRiotApi(req, res, parts);
+  if (parts[1] === 'cycles') return handleCyclesApi(req, res, parts, url);
   if (parts[1] === 'topics' && method === 'GET') return json(res, 200, store.listTopics().map((t) => ({ ...t, retained: broker.retained.has(t.topic) })));
   if (parts[1] === 'history' && method === 'GET') {
     const topic = url.searchParams.get('topic');
@@ -377,6 +413,7 @@ function serveStatic(req, res, url) {
   if (p === '/' || p.startsWith('/d/')) p = '/index.html';
   if (p === '/explorer') p = '/explorer.html';
   if (p === '/riots') p = '/riots.html';
+  if (p === '/cycles') p = '/cycles.html';
   const file = path.normalize(path.join(PUBLIC, p));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
   fs.stat(file, (err, st) => {

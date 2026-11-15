@@ -215,6 +215,18 @@ function wsMqtt(headers, username, password) {
   const viaCf = await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB13/opt?run=1`, { headers: { 'cf-connecting-ip': '203.0.113.9' } });
   ok(viaCf.status === 401 || viaCf.status === 503 || (await viaCf.json()).writable === false, 'internet requests without a login cannot write');
   ctl.s.destroy(); spy.s.destroy();
+  // Plunger cycle records: from the controller (opt/cycle) and from a CSV import
+  const cyc = { v: 1, seq: 7, run: 1, mode: 2, closeTs: 1794690000, openTs: 1794691800, arriveTs: 1794692340, endTs: 1794694800, arrival: 'ontime', flowAvg: 60, end: 2005, sp: { 'SPT1.11': 30, 'SPT0.9': 2000 } };
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/opt/cycle', payload: JSON.stringify(cyc) }));
+  a.s.write(C.encodePublish({ topic: 'riot/AB13/opt/cycle', payload: JSON.stringify(cyc) }));   // re-sent after a reconnect
+  await sleep(300);
+  const cy1 = await (await get('/api/cycles/AB13?days=3650')).json();
+  ok(cy1.total === 1 && cy1.cycles[0].tripMin === 9 && cy1.cycles[0].velocity === 222 && cy1.cycles[0].gas === 2.083, 'controller cycle record stored once, with trip, velocity and gas worked out');
+  const csv = 'well,openTs,shutInMin,flowMin,arrival,gas\nOLD 1,2026-10-01 06:30,30,50,ontime,2.08\nOLD 1,2026-10-01 07:50,30,22,LATE,0.71\nOLD 1,nope,30,22,late,0.7\n';
+  const im = await (await fetch(`http://127.0.0.1:${HTTP}/api/cycles/import`, { method: 'POST', body: csv })).json();
+  const im2 = await (await fetch(`http://127.0.0.1:${HTTP}/api/cycles/import`, { method: 'POST', body: csv })).json();
+  const wl = await (await get('/api/cycles')).json();
+  ok(im.wells['OLD 1'].added === 2 && im.errorCount === 1 && im2.wells['OLD 1'].duplicates === 2 && wl.some((w) => w.well === 'OLD 1' && w.cycles === 2), 'CSV import: rows added, a bad row reported, re-import skips duplicates');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);

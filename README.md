@@ -32,6 +32,7 @@ bash deploy/install-service.sh  # optional: run as a service that starts at boot
 | [Getting started](docs/getting-started.md) | Install, run, change ports, reach it from other devices, firewall, run as a service |
 | [Dashboards](docs/dashboards.md) | Editor, widgets, binding topics, JSON paths, phone/tablet layouts |
 | [RIOT controllers](docs/riots.md) | Approving controllers, auto-built well pages, friendly names, message format |
+| [Plunger cycles](docs/cycles.md) | Cycle history per well, importing other wells' history, the cycle record format |
 | [Explorer](docs/explorer.md) | Browsing topics, history, publishing, clients |
 | [Configuration](docs/configuration.md) | `config.json` reference, broker users and passwords |
 | [Updating](docs/updating.md) | In-app updates, admin password, rollback, building a release |

@@ -30,8 +30,8 @@ function readJson(file, def) { try { return JSON.parse(fs.readFileSync(file, 'ut
 const macFromClientId = (cid) => { const m = /([0-9A-Fa-f]{12})$/.exec(cid || ''); return m ? m[1].toUpperCase().match(/../g).join(':') : null; };
 
 class Riots {
-  constructor({ broker, store, config, log = console.log }) {
-    this.broker = broker; this.store = store; this.config = config; this.log = log;
+  constructor({ broker, store, config, cycles = null, log = console.log }) {
+    this.broker = broker; this.store = store; this.config = config; this.log = log; this.cycles = cycles;
     this.file = path.join(store.dir, 'riots.json');
     this.profilesFile = path.join(store.dir, 'riot-profiles.json');
     this.db = readJson(this.file, { devices: {} });
@@ -79,6 +79,8 @@ class Riots {
     if (!d || d.state === 'rejected') return;
     if (rest === 'telemetry') return this.onTelemetry(d, text);
     // Optimizer run 1: opt/SPTn, opt/meta/SPTn. A second run: opt/run2/SPTn, opt/run2/meta/SPTn.
+    const cyc = /^opt\/(?:run(\d+)\/)?cycle$/.exec(rest);
+    if (cyc) { if (this.cycles) this.cycles.onMessage(id, Number(cyc[1] || 1), text); return; }
     const ack = /^opt\/(?:run(\d+)\/)?ack$/.exec(rest);
     if (ack) return this.onAck(d, text);
     const om = /^opt\/(?:run(\d+)\/)?(meta\/)?SPT\d+$/.exec(rest);
