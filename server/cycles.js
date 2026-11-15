@@ -156,6 +156,12 @@ class Cycles {
     return out.sort((a, b) => a.well.localeCompare(b.well));
   }
 
+  // Deletes a well's records (used for the demo wells)
+  remove(well) {
+    try { fs.unlinkSync(this.file(well)); } catch { /* none */ }
+    this.cache.delete(safeName(well));
+  }
+
   list(well, { since = 0, until = Infinity, run } = {}) {
     return this.load(well).records.filter((r) => r.openTs >= since && r.openTs < until && (!run || r.run === run));
   }

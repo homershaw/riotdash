@@ -334,7 +334,16 @@ async function handleRiotApi(req, res, parts) {
 // POST /api/cycles/import[?well=<name>] with the CSV as the body.
 async function handleCyclesApi(req, res, parts, url) {
   try {
-    if (!parts[2] && req.method === 'GET') return json(res, 200, cycles.wells());
+    const advisor = require('./advisor');
+    if (!parts[2] && req.method === 'GET') return json(res, 200, cycles.wells().map((w) => ({ ...w, advisor: advisor.evaluate(cycles.list(w.well)).status })));
+    // Demo wells with known problems, for trying the Advisor (server/cycle-sim.js)
+    if (parts[2] === 'demo') {
+      if (viaInternet(req) && !req.authUser) return json(res, 403, { error: 'Log in first' });
+      const sim = require('./cycle-sim');
+      if (req.method === 'POST') { const r = {}; for (const w of Object.keys(sim.SCENARIOS)) { cycles.remove(w); r[w] = cycles.add(w, sim.simulate(w)).added; } return json(res, 200, { wells: r }); }
+      if (req.method === 'DELETE') { const gone = cycles.wells().filter((w) => /^DEMO /.test(w.well)).map((w) => w.well); for (const w of gone) cycles.remove(w); return json(res, 200, { removed: gone }); }
+      if (req.method === 'GET') return json(res, 200, Object.fromEntries(Object.entries(sim.SCENARIOS).map(([k, v]) => [k, v.note])));
+    }
     if (parts[2] === 'import' && req.method === 'POST') {
       if (viaInternet(req) && !req.authUser) return json(res, 403, { error: 'Log in to import' });
       const text = await readBody(req, 200 * 1024 * 1024);
@@ -345,7 +354,8 @@ async function handleCyclesApi(req, res, parts, url) {
       const days = Math.min(3650, Number(q.get('days')) || 30), tz = Number(q.get('tz')) || 0;
       const since = Math.floor(Date.now() / 1000) - days * 86400;
       const list = cycles.list(well, { since });
-      return json(res, 200, { well, daily: cycles.daily(well, { days, tzOffsetMin: tz }), cycles: list.slice(-Math.min(2000, Number(q.get('limit')) || 200)).reverse(), total: list.length });
+      const notes = require('./cycle-sim').SCENARIOS;
+      return json(res, 200, { well, advisor: advisor.evaluate(cycles.list(well)), demo: notes[well] ? notes[well].note : undefined, daily: cycles.daily(well, { days, tzOffsetMin: tz }), cycles: list.slice(-Math.min(2000, Number(q.get('limit')) || 200)).reverse(), total: list.length });
     }
     return json(res, 404, { error: 'not found' });
   } catch (e) { return json(res, 400, { error: e.message }); }

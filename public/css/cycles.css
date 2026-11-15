@@ -21,3 +21,19 @@
 .cy-tbl { font-size: 12.5px; } .cy-tbl td { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cy-tbl td.warn { color: var(--warn); } .cy-tbl td.bad { color: var(--alarm); font-weight: 600; }
 @media (max-width: 800px) { .cy { grid-template-columns: 1fr; } .cy-wells { position: static; } .cy-charts { grid-template-columns: 1fr; } }
+.cy-demo { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.adv-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; background: var(--ok); vertical-align: 1px; }
+.adv-dot.warn { background: var(--warn); } .adv-dot.alarm { background: var(--alarm); } .adv-dot.none { background: var(--muted); }
+.cy-demonote { border: 1px dashed var(--border); color: var(--muted); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; margin-bottom: 10px; }
+.adv { margin-bottom: 12px; } .adv-head { display: flex; align-items: baseline; gap: 10px; } .adv-head h3 { margin: 4px 0 6px; } .adv-head small { color: var(--muted); }
+#advisor { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+.adv-card { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.adv-card.warn { border-left-color: var(--warn); } .adv-card.alarm { border-left-color: var(--alarm); }
+.adv-card p { margin: 0; font-size: 12.5px; line-height: 1.45; } .adv-card em { color: var(--muted); font-style: normal; }
+.adv-title { display: flex; align-items: baseline; gap: 8px; } .adv-title b { font-size: 14px; }
+.adv-sev { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.adv-card.warn .adv-sev { color: var(--warn); } .adv-card.alarm .adv-sev { color: var(--alarm); }
+.adv-show { align-self: flex-start; font-size: 12px; padding: 3px 8px; margin-top: 2px; }
+.adv-ok { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--ok); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; gap: 8px; }
+.adv-ok span { color: var(--ok); font-weight: 700; }
+.cy-tbl tr.hl td { background: rgba(245,158,11,.14); }
