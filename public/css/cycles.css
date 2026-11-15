@@ -1,0 +1,23 @@
+.cy { max-width: 1400px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; align-items: start; }
+.cy-wells { position: sticky; top: 70px; display: flex; flex-direction: column; gap: 6px; }
+.cy-wells #wells { display: flex; flex-direction: column; gap: 6px; }
+.cy-well { text-align: left; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); display: flex; flex-direction: column; gap: 2px; }
+.cy-well span { color: var(--muted); font-size: 11.5px; }
+.cy-well.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.cy-head { display: flex; align-items: center; gap: 12px; } .cy-head h2 { flex: 1; } .cy-head select { width: auto; }
+.cy-main h3 { font-size: 14px; margin: 18px 0 6px; } .cy-main h3 small { color: var(--muted); font-weight: 400; }
+.cy-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 12px; }
+.cy-tile { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.cy-tile span { color: var(--muted); font-size: 12px; } .cy-tile b { font-size: 24px; font-variant-numeric: tabular-nums; } .cy-tile small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.cy-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+.cy-charts figure { margin: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.cy-charts figcaption { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cy-charts figcaption small { color: var(--muted); font-weight: 400; }
+.cy-legend { display: flex; gap: 10px; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.cy-legend span { display: inline-flex; align-items: center; gap: 4px; } .cy-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.cy-svg { width: 100%; height: auto; display: block; }
+.cy-grid { stroke: var(--grid); stroke-width: 1; } .cy-ax { fill: var(--muted); font-size: 10px; }
+.cy-hit { fill: transparent; } .cy-hit:hover { fill: rgba(148,163,184,.08); }
+.cy-tbl { font-size: 12.5px; } .cy-tbl td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cy-tbl td.warn { color: var(--warn); } .cy-tbl td.bad { color: var(--alarm); font-weight: 600; }
+@media (max-width: 800px) { .cy { grid-template-columns: 1fr; } .cy-wells { position: static; } .cy-charts { grid-template-columns: 1fr; } }

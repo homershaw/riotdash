@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+- **Plunger cycle history.** Controllers can publish one record per cycle on `riot/<id>/opt/cycle`. riotdash stores them per well and shows them on the new **Cycles** page: cycles and gas per day, arrival results, velocity, shut-in and flow times, and the most recent cycles. See [Plunger cycles](docs/cycles.md).
+- **Import other wells' history** from CSV, on the Cycles page or with `node server/index.js import-cycles <file.csv>`. Re-importing skips rows already there.
+
 ## 0.8.1
 - A user whose `publish` ACL names `riot/<id>/opt/set` can now publish it after logging in through Cloudflare, even with MQTT auth off on your network. Before, the ACL only counted when `auth.enabled` was on.
 

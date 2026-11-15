@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="theme-color" content="#111827">
+  <title>Cycles · riotdash</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/explorer.css">
+  <link rel="stylesheet" href="/css/riots.css">
+  <link rel="stylesheet" href="/css/cycles.css">
+</head>
+<body class="riots-page cycles-page">
+  <header class="topbar">
+    <div class="brand"><img src="/favicon.svg" alt=""> <span>MQTT Dash</span></div>
+    <nav class="tabs">
+      <a href="/" class="tab">Dashboards</a>
+      <a href="/riots" class="tab">Riots</a>
+      <a href="/cycles" class="tab active">Cycles</a>
+      <a href="/explorer" class="tab">Explorer</a>
+    </nav>
+    <div class="spacer"></div>
+    <button id="importBtn" class="btn primary" type="button">Import CSV…</button>
+  </header>
+
+  <main class="rp cy">
+    <aside class="cy-wells">
+      <h2>Wells</h2>
+      <div id="wells"></div>
+      <p class="hint">Controllers add a record at the end of every plunger cycle (<code>riot/&lt;id&gt;/opt/cycle</code>). History from other wells comes in with <b>Import CSV</b>.</p>
+    </aside>
+    <section class="cy-main">
+      <div class="cy-head"><h2 id="wellName">Plunger cycles</h2>
+        <select id="days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="3650">All</option></select></div>
+      <div id="empty" class="empty">Pick a well, or import cycle history.</div>
+      <div id="content" hidden>
+        <div class="cy-tiles" id="tiles"></div>
+        <div class="cy-charts">
+          <figure><figcaption>Gas per day <small>E3m3</small></figcaption><div id="gasChart" class="cy-chart"></div></figure>
+          <figure><figcaption>Cycles per day by arrival <span class="cy-legend" id="arrLegend"></span></figcaption><div id="arrChart" class="cy-chart"></div></figure>
+        </div>
+        <h3>By day</h3>
+        <div class="tbl-wrap"><table class="tbl cy-tbl"><thead><tr><th>Day</th><th>Cycles</th><th>Gas E3m3</th><th>Shut-in min</th><th>Flow min</th><th>Velocity m/min</th><th>On time</th><th>Early</th><th>Late</th><th>Failed</th><th>Line high</th></tr></thead><tbody id="daily"></tbody></table></div>
+        <h3>Recent cycles <small id="totalNote"></small></h3>
+        <div class="tbl-wrap"><table class="tbl cy-tbl"><thead><tr><th>Opened</th><th>Shut-in</th><th>Trip</th><th>Arrival</th><th>m/min</th><th>Afterflow</th><th>Flow</th><th>Casing / tubing / line at open</th><th>Gas</th><th>Mode</th><th>Ended</th></tr></thead><tbody id="recent"></tbody></table></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="importDlg" class="labels-dlg">
+    <div class="ld">
+      <div class="ld-head"><h2>Import cycle history</h2><button class="btn ghost" type="button" data-close aria-label="Close">✕</button></div>
+      <p class="hint">A CSV with one row per cycle: <code>well</code>, <code>openTs</code>, <code>shutInMin</code> (or <code>closeTs</code>), <code>flowMin</code> (or <code>endTs</code>), plus any other fields from the cycle record format. Rows already imported are skipped, so importing the same file twice is safe.</p>
+      <label>CSV file <input id="impFile" type="file" accept=".csv,text/csv"></label>
+      <label>Well name <small>(only if the file has no <code>well</code> column)</small><input id="impWell" type="text" placeholder="e.g. BRAZEAU 4-12"></label>
+      <div id="impResult" class="hint"></div>
+      <div class="dlg-actions"><button class="btn" type="button" data-close>Close</button><button id="impGo" class="btn primary" type="button">Import</button></div>
+    </div>
+  </dialog>
+
+  <div id="toasts"></div>
+  <script type="module" src="/js/cycles.js"></script>
+</body>
+</html>
