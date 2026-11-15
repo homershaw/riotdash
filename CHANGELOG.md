@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+- **Advisor** on the Cycles page: checks each well's last 48 h of cycles against the 14 days before and reports what it finds, with numbers, the likely cause, what to consider, and the cycles behind it. It finds slow casing build-up (tubing leak), higher line pressure, a velocity creep (worn plunger), fast or slow arrivals against target, rising late and failed arrivals (liquid loading), lower gas, and wells that stopped cycling. It never changes anything. See [Advisor](docs/cycles.md#advisor).
+- **Demo wells** for trying it: six simulated wells, each with one known problem. Load and remove them on the Cycles page.
+- The wells list shows each well's worst finding.
+
 ## 0.9.0
 - **Plunger cycle history.** Controllers can publish one record per cycle on `riot/<id>/opt/cycle`. riotdash stores them per well and shows them on the new **Cycles** page: cycles and gas per day, arrival results, velocity, shut-in and flow times, and the most recent cycles. See [Plunger cycles](docs/cycles.md).
 - **Import other wells' history** from CSV, on the Cycles page or with `node server/index.js import-cycles <file.csv>`. Re-importing skips rows already there.

@@ -1,6 +1,6 @@
 {
   "name": "mqtt-dash",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Self-hosted MQTT broker with a drag-and-drop HMI/SCADA-style dashboard. Zero dependencies.",
   "main": "server/index.js",
   "bin": { "mqtt-dash": "server/index.js" },

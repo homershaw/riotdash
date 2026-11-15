@@ -227,6 +227,15 @@ function wsMqtt(headers, username, password) {
   const im2 = await (await fetch(`http://127.0.0.1:${HTTP}/api/cycles/import`, { method: 'POST', body: csv })).json();
   const wl = await (await get('/api/cycles')).json();
   ok(im.wells['OLD 1'].added === 2 && im.errorCount === 1 && im2.wells['OLD 1'].duplicates === 2 && wl.some((w) => w.well === 'OLD 1' && w.cycles === 2), 'CSV import: rows added, a bad row reported, re-import skips duplicates');
+  // Advisor on simulated wells: the healthy one is clean, each problem well gets its finding, demo wells can be removed
+  await fetch(`http://127.0.0.1:${HTTP}/api/cycles/demo`, { method: 'POST' });
+  const adv = async (w) => (await (await get('/api/cycles/' + encodeURIComponent(w))).json()).advisor.findings.map((f) => f.id);
+  const expect = { 'DEMO Healthy': [], 'DEMO Worn plunger': ['creep'], 'DEMO Liquid loading': ['loading', 'gas-down'], 'DEMO Tubing leak': ['casing-build'], 'DEMO Line pressure': ['line-high'], 'DEMO Long shut-in': ['fast'] };
+  const got = {}; for (const w of Object.keys(expect)) got[w] = await adv(w);
+  ok(Object.entries(expect).every(([w, ids]) => ids.every((i) => got[w].includes(i)) && (ids.length || !got[w].length)) && !got['DEMO Line pressure'].includes('creep'),
+    'Advisor finds each simulated problem, and nothing on the healthy well ' + JSON.stringify(got));
+  await fetch(`http://127.0.0.1:${HTTP}/api/cycles/demo`, { method: 'DELETE' });
+  ok(!(await (await get('/api/cycles')).json()).some((w) => /^DEMO /.test(w.well)), 'demo wells removed, real wells kept');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);
