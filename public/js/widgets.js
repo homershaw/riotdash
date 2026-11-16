@@ -655,18 +655,21 @@ WIDGETS.plunger = {
       const esdOk = j.esd !== false;
       const offCycle = [2003, 2004, 2006, 2010, 2014, 2016].includes(msc);
       const flowing = known ? open : !offCycle && msc > 0;   // valve unknown: follow the optimizer's cycle
-      const banner = j.banner || (!j.running ? 'STOPPED' : !esdOk ? 'ESD' : flowing ? 'FLOWING' : 'SHUT IN');
+      const preflow = msc === 2005 || msc === 2006;
+      const banner = j.banner || (!j.running ? 'STOPPED' : !esdOk ? 'ESD' : msc === 2005 ? 'PRE-FLOW' : flowing ? 'FLOWING' : 'SHUT IN');
       const b = $('.plg-banner'); b.textContent = banner;
       b.className = 'plg-banner ' + (j.banner ? 'shutin' : !j.running ? 'stopped' : !esdOk ? 'esd' : flowing ? 'flowing' : 'shutin');
       $('.plg-stage').textContent = j.modeStatusText || MSC[msc] || '';
       const onCycle = flowing;
-      const x = (onCycle ? t.timeOn : t.timeOff), y = onCycle ? c.timeOnSp : c.timeOffSp;
+      // The counting timer: pre-flow and bypass cycles have their own (activeTimer); otherwise time on / time off from the valve
+      const act = j.activeTimer;
+      const x = act ? act.elapsed : (onCycle ? t.timeOn : t.timeOff), y = act ? act.sp : onCycle ? c.timeOnSp : c.timeOffSp;
       const xr = Number.isFinite(x) ? (y > 0 ? Math.min(y, x + elapsedMin) : x + elapsedMin) : x;   // a finished timer stays at its setpoint
-      $('.plg-tlabel').textContent = onCycle ? 'Time on' : 'Time off';
+      $('.plg-tlabel').textContent = act ? act.label : onCycle ? 'Time on' : 'Time off';
       $('.plg-t1').textContent = optFmt(xr, 1); $('.plg-t2').textContent = optFmt(y, 1);
       const pct = y > 0 && Number.isFinite(xr) ? Math.max(0, Math.min(1, xr / y)) : 0;
       $('.plg-bar i').style.width = pct * 100 + '%';
-      $('.plg-remain').textContent = y > 0 && Number.isFinite(xr) ? `${onCycle ? (msc === 2012 ? 'Afterflow' : 'Flow time') : 'Shut-in'} ${optFmt(Math.max(0, y - xr), 1)} min left` : '';
+      $('.plg-remain').textContent = y > 0 && Number.isFinite(xr) ? `${preflow ? 'Pre-flow' : onCycle ? (msc === 2012 ? 'Afterflow' : 'Flow time') : 'Shut-in'} ${optFmt(Math.max(0, y - xr), 1)} min left` : '';
       $('.plg-mode').textContent = `Mode ${j.mode ?? '—'} · ${j.modeName || ''}`;
       $('.plg-err').textContent = (j.errorCode ? `Error ${j.errorCode}${j.errorText ? ': ' + j.errorText : ''}` : 'No error') + (!known ? ` · Valve feedback unknown${j.valveNote ? ' (' + j.valveNote + ')' : ''}` : '');
       $('.plg-err').classList.toggle('warn', !known && !j.errorCode);
@@ -686,7 +689,7 @@ WIDGETS.plunger = {
       $('.plg-vtext').textContent = !known ? 'UNKNOWN' : open ? 'OPEN' : 'CLOSED';
       const depth = Number(c.wellDepth);
       $('.plg-depth').textContent = Number.isFinite(depth) && depth > 0 ? `${optFmt(depth)} m` : '';
-      const pos = !j.running ? null : !open ? 330 : msc === 2012 ? 22 : 190;   // bottom / rising / at surface
+      const pos = !j.running || msc === 2005 ? null : !open ? 330 : msc === 2012 ? 22 : 190;   // pre-flow: no plunger trip to show   // bottom / rising / at surface
       const pg = $('.plg-plunger'), ptxt = $('.plg-ptext');
       if (pos === null) { pg.style.display = 'none'; ptxt.textContent = ''; }
       else { pg.style.display = ''; pg.setAttribute('transform', `translate(0 ${pos - 8})`); ptxt.setAttribute('y', pos < 60 ? 96 : pos + 4); ptxt.textContent = !open ? 'at bottom' : msc === 2012 ? '▲ at surface' : 'rising ▲'; }

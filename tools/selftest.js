@@ -236,6 +236,19 @@ function wsMqtt(headers, username, password) {
     'Advisor finds each simulated problem, and nothing on the healthy well ' + JSON.stringify(got));
   await fetch(`http://127.0.0.1:${HTTP}/api/cycles/demo`, { method: 'DELETE' });
   ok(!(await (await get('/api/cycles')).json()).some((w) => /^DEMO /.test(w.well)), 'demo wells removed, real wells kept');
+  // Pre-flow (C56E test, Mode 1): the panel follows the pre-flow timer, not the idle time on / time off timers
+  const pf = async (msc, valve, extra) => {
+    const v = { SPT0: { 'SPT0.1': 1, 'SPT0.5': 1 }, SPT1: { 'SPT1.1': 1, 'SPT1.9': 4, 'SPT1.11': 5, 'SPT1.15': 2, 'SPT1.16': 3 },
+      SPT3: { 'SPT3.6': 0.5, 'SPT3.7': 1, 'SPT3.0': 70200 }, SPT4: { 'SPT4.1': msc }, SPT5: { 'SPT5.12': 1300, 'SPT5.13': 1200, 'SPT5.14': 650, 'SPT5.16': valve, 'SPT5.18': 4, 'SPT5.20': 5, ...extra } };
+    for (const [k, x] of Object.entries(v)) a.s.write(C.encodePublish({ topic: `riot/AB14/opt/${k}`, payload: JSON.stringify({ ts: 1794700000, v: x }) }));
+    await sleep(800);
+    return JSON.parse(((await (await get('/api/topics')).json()).find((t) => t.topic === 'riot/AB14/opt7/1') || { payload: '{}' }).payload);
+  };
+  a.s.write(C.encodePublish({ topic: 'riot/AB14/info', payload: JSON.stringify({ ...info, clientId: 'RiotP4-1C2904FFAB14' }), retain: true })); await sleep(200);
+  const p1 = await pf(2005, 1, {}), p2 = await pf(2006, 0, {}), p3 = await pf(2001, 1, {});
+  ok(p1.activeTimer && p1.activeTimer.label === 'Pre-flow on' && p1.activeTimer.elapsed === 1.5 && p1.activeTimer.sp === 2
+    && p2.activeTimer.label === 'Pre-flow off' && p2.activeTimer.elapsed === 2 && p3.activeTimer === null,
+    'pre-flow on / off show their own timer (1.5 of 2, 2 of 3); time on cycle falls back to time on');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);

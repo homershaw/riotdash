@@ -178,7 +178,7 @@ class Cycles {
       if (r.gas !== undefined) { d.gas += r.gas; d.gasN++; }
       if (r.velocity > 0) d.vel.push(r.velocity);
       d[r.arrival in d ? r.arrival : 'none']++;
-      if (r.end === 2010 || r.end === 2016) d.lineHigh++;
+      if (r.end === 2010) d.lineHigh++;
     }
     return [...by.values()].sort((a, b) => b.day.localeCompare(a.day)).map((d) => ({
       day: d.day, cycles: d.cycles, gas: d.gasN ? Math.round(d.gas * 1000) / 1000 : null,

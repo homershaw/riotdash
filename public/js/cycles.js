@@ -8,8 +8,8 @@ const api = async (url, opts) => { const r = await fetch(url, opts); const j = a
 const tz = -new Date().getTimezoneOffset();
 const f = (x, d = 0) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : Number(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
 const time = (t) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const MSC = { 2001: 'Pre-flow', 2002: 'Time on', 2003: 'Time off', 2004: 'Min shut-in', 2005: 'Critical flow', 2006: 'Max shut-in', 2007: 'Max flow time', 2008: 'Load factor',
-  2009: 'Casing-tubing DP', 2010: 'Line pressure high', 2011: 'Casing pressure', 2012: 'Post plunger sales', 2013: 'Min flow time', 2014: 'Post plunger shut-in', 2015: 'Afterflow', 2016: 'Line high' };
+const MSC = { 2001: 'Time on', 2002: 'Time on bypass', 2003: 'Time off', 2004: 'Time off bypass', 2005: 'Pre-flow on', 2006: 'Pre-flow off', 2007: 'Critical flow bypass', 2008: 'Casing static DP bypass',
+  2009: 'Stable flow', 2010: 'Line pressure high', 2011: 'Plunger rising', 2012: 'Post plunger sales', 2013: 'Casing bypass', 2014: 'Backup time off', 2015: 'Load factor bypass', 2016: 'Extended shut-in' };
 const ARR = [['ontime', 'On time', 'var(--ok)'], ['early', 'Early', '#a78bfa'], ['late', 'Late', '#f97316'], ['failed', 'Failed', 'var(--alarm)']];
 
 const SEV = { alarm: ['Alarm', '⛔'], warn: ['Warning', '⚠'], info: ['Note', 'ℹ'], ok: ['OK', '✓'] };
