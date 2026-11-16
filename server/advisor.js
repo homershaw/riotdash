@@ -12,7 +12,7 @@ const pct = (x) => Math.round(x * 100);
 const r1 = (x) => Math.round(x * 10) / 10;
 const arrived = (c) => c.arrival === 'ontime' || c.arrival === 'early' || c.arrival === 'late';
 const judged = (c) => arrived(c) || c.arrival === 'failed';
-const LINE_HIGH = [2010, 2016];
+const LINE_HIGH = [2010];   // OPT 7.02 mode status: line pressure high cycle
 
 // least-squares slope of y over x
 function slope(pts) {

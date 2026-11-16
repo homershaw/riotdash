@@ -49,7 +49,7 @@ function simulate(name, { days = 30, end = Math.floor(Date.now() / 1000), seed =
     const arriveTs = tripMin ? Math.round(openTs + tripMin * 60) : 0;
     const tubingOpen = casingOpen - 90 - 40 * liquid + n(10);
     casingEnd = line + 260 + 0.2 * (casingOpen - line - 620) + n(15);   // blows down towards line pressure while flowing
-    const ended = arrival !== 'failed' && R() < lineHighP ? 2010 : arrival === 'failed' ? 2007 : 2005;
+    const ended = arrival !== 'failed' && R() < lineHighP ? 2010 : arrival === 'failed' ? 2011 : 2012;   // line high / still rising / post plunger sales
     out.push({ v: 1, seq: seq++, run: 1, mode: 2, closeTs, openTs, arriveTs, endTs, arrival,
       shutInMin: Math.round(shut * 10) / 10, tripMin: tripMin && Math.round(tripMin * 10) / 10, afterflowMin: tripMin ? Math.round((flowMin - tripMin) * 10) / 10 : undefined,
       flowMin: Math.round(flowMin * 10) / 10, velocity: velocity && Math.round(velocity),

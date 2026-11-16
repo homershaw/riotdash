@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1
+Fixes from the C56E mode tests (Dash Issue 1-1):
+- **Pre-flow** shows correctly on the Plunger lift panel: a **PRE-FLOW** banner and the Pre-flow on timer (SPT3.6 against SPT1.15) while the valve is open, then SHUT IN with the Pre-flow off timer (SPT3.7 against SPT1.16). Before, the panel showed the idle Time On or Time Off timer.
+- Bypass cycles (time on bypass, time off bypass, backup time off) show their own timer too.
+- The Cycles page names mode status codes as OPT 7.02 does (for example 2012 Post plunger sales, 2016 Extended shut-in). The Advisor no longer counts Extended shut-in as a line pressure high cycle.
+
 ## 0.10.0
 - **Advisor** on the Cycles page: checks each well's last 48 h of cycles against the 14 days before and reports what it finds, with numbers, the likely cause, what to consider, and the cycles behind it. It finds slow casing build-up (tubing leak), higher line pressure, a velocity creep (worn plunger), fast or slow arrivals against target, rising late and failed arrivals (liquid loading), lower gas, and wells that stopped cycling. It never changes anything. See [Advisor](docs/cycles.md#advisor).
 - **Demo wells** for trying it: six simulated wells, each with one known problem. Load and remove them on the Cycles page.

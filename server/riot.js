@@ -366,6 +366,21 @@ const version = (x) => (!(x > 0) ? undefined : x >= 10000 ? `${Math.floor(x / 10
 const OPT_ERRORS = { 111: 'Line pressure input', 112: 'Line pressure high', 114: 'Fast plunger shut-in', 115: 'Stopped by operator',
   116: 'ESD input invalid', 117: 'Well ESD', 118: 'Start position', 119: 'Mode 8 needs a plunger', 120: 'Flow run' };
 // v(key) -> number|null for soft points "SPTn.p". Timers in the soft points count down (minutes remaining).
+// The timer that is counting in the current cycle (OPT 7.02 opt2mode.c): pre-flow on/off (2005/2006), the bypass timers in
+// bypass cycles, otherwise time on or time off. Soft points hold the time remaining; the panel shows elapsed against the setpoint.
+function activeTimer(v) {
+  const msc = v('SPT4.1');
+  const pick = (label, spKey, leftKey, kind) => {
+    const sp = v(spKey), left = v(leftKey);
+    return sp > 0 && left !== null ? { label, sp, elapsed: Math.max(0, sp - left), kind } : null;
+  };
+  if (msc === 2005) return pick('Pre-flow on', 'SPT1.15', 'SPT3.6', 'preflow');
+  if (msc === 2006) return pick('Pre-flow off', 'SPT1.16', 'SPT3.7', 'preflow');
+  if ([2002, 2007, 2008, 2011, 2013, 2015].includes(msc)) return pick('Time on bypass', 'SPT1.10', 'SPT5.19', 'on') || pick('Time on', 'SPT1.9', 'SPT5.18', 'on');
+  if ([2004, 2014].includes(msc)) return pick('Time off bypass', 'SPT1.12', 'SPT5.21', 'off') || pick('Time off', 'SPT1.11', 'SPT5.20', 'off');
+  return null;   // time on / time off: chosen by the panel from the valve
+}
+
 function sptToStatus(v, { valveUnknown = false } = {}) {
   const mode = v('SPT0.1'), ps = v('SPT1.1'), valve = v('SPT5.16'), depth = v('SPT0.9');
   const onSp = v('SPT1.9'), offSp = v('SPT1.11'), onLeft = v('SPT5.18'), offLeft = v('SPT5.20');
@@ -388,10 +403,13 @@ function sptToStatus(v, { valveUnknown = false } = {}) {
     // Critical flow: the manual setpoint when the override is on (SPT0.2), else the calculated value, as /api/optimization does.
     pv: { casing: v('SPT5.12'), tubing: v('SPT5.13'), line: v('SPT5.14'), flow: v('SPT0.4'), criticalFlow: v('SPT0.2') ? v('SPT1.2') : v('SPT3.12'),
       criticalFlowManual: !!v('SPT0.2'), casingTubingDp: v('SPT3.9'), loadFactor: v('SPT3.16') },
-    timers: { timeOn: elapsed(onSp, onLeft), timeOff: elapsed(offSp, offLeft), flowTime: v('SPT3.14'), shutInTime: v('SPT3.15') },
+    timers: { timeOn: elapsed(onSp, onLeft), timeOff: elapsed(offSp, offLeft), flowTime: v('SPT3.14'), shutInTime: v('SPT3.15'),
+      preFlowOn: elapsed(v('SPT1.15'), v('SPT3.6')), preFlowOff: elapsed(v('SPT1.16'), v('SPT3.7')),
+      timeOnBypass: elapsed(v('SPT1.10'), v('SPT5.19')), timeOffBypass: elapsed(v('SPT1.12'), v('SPT5.21')) },
+    activeTimer: activeTimer(v),
     plunger: { onTime: v('SPT3.18'), early: v('SPT3.19'), late: v('SPT3.20'), failed: v('SPT3.21'), avgVelocity: v('SPT5.17'), history,
       lastVelocity: v('SPT3.10'), lastDuration: v('SPT3.11') },
-    config: { timeOnSp: onSp, timeOffSp: offSp, targetVelocity: v('SPT2.12'), wellDepth: depth, mode: v('SPT0.7') },
+    config: { timeOnSp: onSp, timeOffSp: offSp, preFlowOnSp: v('SPT1.15'), preFlowOffSp: v('SPT1.16'), timeOnBypassSp: v('SPT1.10'), timeOffBypassSp: v('SPT1.12'), targetVelocity: v('SPT2.12'), wellDepth: depth, mode: v('SPT0.7') },
     run: 1,
   };
 }

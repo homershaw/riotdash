@@ -71,7 +71,7 @@ Times are epoch seconds (UTC), pressures kPa, gas E3m3, durations minutes, veloc
 | `casingArrive`, `tubingArrive` | at arrival |
 | `casingEnd`, `tubingEnd`, `lineEnd`, `lineMax` | when the valve closed; highest line pressure in the cycle |
 | `gas`, `flowAvg` | gas during the flow period; average rate while open (gas is worked out from it when missing) |
-| `end`, `error` | why the valve closed (mode status code, or `stopped`, `esd`, `restart`); program error at close |
+| `end`, `error` | why the valve closed: the mode status code at close (e.g. 2012 post plunger sales, 2010 line pressure high), or `stopped`, `esd`, `restart`; program error at close |
 | `sp` | the R/W soft points in effect when the valve opened, `{"SPTn.p": value}` |
 
 ## Storage and size
