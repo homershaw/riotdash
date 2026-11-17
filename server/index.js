@@ -298,6 +298,7 @@ async function handleRiotApi(req, res, parts) {
       const model = decodeURIComponent(parts[2] || '');
       if (!model) return json(res, 200, riots.profiles);
       if (m === 'GET') return json(res, 200, riots.profile(model));
+      if (m === 'DELETE' && parts[3] === 'template') { riots.removeTemplate(model); return json(res, 200, { ok: true }); }
       if (m === 'PUT') {
         const b = await body();
         const p = riots.setProfile(model, b);
@@ -312,6 +313,11 @@ async function handleRiotApi(req, res, parts) {
     const action = parts[3];
     if (m === 'POST' && action === 'approve') { const b = await body(); riots.approve(id, b.name); return json(res, 200, { ok: true, dashboard: require('./riot-pages').pageId(id) }); }
     if (m === 'POST' && action === 'reject') { riots.reject(id); return json(res, 200, { ok: true }); }
+    if (m === 'POST' && action === 'template') {
+      const b = await body(); const t = riots.saveTemplate(id); let rebuilt = 0;
+      if (b.apply) rebuilt = riots.rebuildModel(riots.device(id).model);
+      return json(res, 200, { ok: true, template: { from: t.from, widgets: t.widgets }, rebuilt });
+    }
     if (m === 'POST' && action === 'rebuild') { riots.buildPage(id); riots.buildOverview(); return json(res, 200, { ok: true }); }
     if (m === 'PUT' && !action) { const b = await body(); riots.update(id, b); if (b.rebuild) { riots.buildPage(id); riots.buildOverview(); } return json(res, 200, { ok: true }); }
     if (m === 'DELETE' && !action) { riots.forget(id); return json(res, 200, { ok: true }); }

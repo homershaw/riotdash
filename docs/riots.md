@@ -15,6 +15,17 @@ riotdash recognises RIOT controllers (e.g. the ESP32-S31-OPT Optimization Well) 
 
 If two controllers report the same ID (two MACs ending in the same four characters), the card shows a warning with both client IDs.
 
+## Page template: the same layout for every controller of a model
+
+Arrange one controller's page the way you want it (in the dashboard editor), then on the **Riots** page click **Use as template** on that controller's row. From then on, every controller of the same model gets a copy of that page when it's approved, pointed at its own data:
+- topics `riot/<id>/…` are changed to the new controller's id
+- links to the controller's page are changed to its own page
+- a text that was exactly the controller's name becomes the new controller's name
+
+riotdash offers to apply the template to the model's other approved controllers right away (this replaces their pages). **Rebuild page** also uses the template. After changing the template controller's page again, click **Update template**. **Stop using template** (under *Model profiles*) goes back to the automatically built page for new controllers; existing pages are not changed.
+
+A widget for a Tag the new controller doesn't have shows "—". Friendly names are part of the copied page, so a per-controller label on the template controller is copied as it is.
+
 ## Friendly names
 
 Tags arrive under their fixed default names (`M31.AI1`, `FLOW1.RATE`…), the same on every controller of a model. Friendly names are kept in riotdash:

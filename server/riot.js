@@ -316,11 +316,43 @@ class Riots {
     return (d.labels && d.labels[tag.name]) || this.profile(d.model).labels[tag.name] || (tag.label && tag.label !== tag.name ? tag.label : tag.name);
   }
 
+  // ---------- page templates: one controller's page, saved as the layout for every controller of its model ----------
+  // Topics and links are stored with placeholders ({id}, {page}, {name}) and filled in for each controller.
+  saveTemplate(id) {
+    const d = this.device(id);
+    if (!d || d.state !== 'approved' || !d.model) throw new Error('only an approved controller with a model can be a template');
+    const dash = this.store.getDashboard(pages.pageId(id));
+    if (!dash) throw new Error('this controller has no page');
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let json = JSON.stringify({ settings: dash.settings || {}, widgets: dash.widgets || [] });
+    json = json.replace(new RegExp(esc(`${this.prefix}/${id}/`), 'g'), `${this.prefix}/{id}/`)
+      .replace(new RegExp(`"${esc(pages.pageId(id))}"`, 'g'), '"{page}"');
+    const name = d.name || id;
+    const t = JSON.parse(json);
+    for (const w of t.widgets) for (const [k, v] of Object.entries(w.props || {})) if (v === name) w.props[k] = '{name}';
+    const p = this.profiles[d.model] = this.profiles[d.model] || { labels: {} };
+    p.template = { from: id, fromName: name, at: Date.now(), widgets: t.widgets.length, page: t };
+    this.saveProfiles();
+    this.log(`[riot] page of ${id} saved as the template for ${d.model}`);
+    return p.template;
+  }
+  removeTemplate(model) {
+    const p = this.profiles[model];
+    if (p && p.template) { delete p.template; this.saveProfiles(); }
+  }
+  fromTemplate(d, tpl) {
+    const esc = (s) => JSON.stringify(String(s)).slice(1, -1);
+    const json = JSON.stringify(tpl.page).split('{id}').join(esc(d.id)).split('"{page}"').join(JSON.stringify(pages.pageId(d.id))).split('"{name}"').join(JSON.stringify(d.name || d.id));
+    const t = JSON.parse(json);
+    return { name: d.name || d.id, settings: { ...t.settings, generated: { by: 'riot', controller: d.id, model: d.model, template: tpl.from, at: Date.now() } }, widgets: t.widgets };
+  }
+
   buildPage(id) {
     const d = this.device(id);
     if (!d || d.state !== 'approved' || !d.info) throw new Error('controller is not approved');
     d.optPanels = pages.optRuns(d).length;   // number of optimizer runs with panels
-    const dash = pages.wellPage(d, { prefix: this.prefix, labelFor: (t) => this.labelFor(d, t) });
+    const tpl = d.model && this.profiles[d.model] && this.profiles[d.model].template;
+    const dash = tpl ? this.fromTemplate(d, tpl) : pages.wellPage(d, { prefix: this.prefix, labelFor: (t) => this.labelFor(d, t) });
     this.store.saveDashboard(pages.pageId(id), dash);
     return dash;
   }
