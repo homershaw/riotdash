@@ -116,19 +116,38 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
   const lhR = recent.filter((c) => LINE_HIGH.includes(Number(c.end))).length / (recent.length || 1);
   const lhB = base.length ? base.filter((c) => LINE_HIGH.includes(Number(c.end))).length / base.length : null;
   const lineR = median(recent.map((c) => c.lineOpen).filter((x) => x > 0)), lineB = median(base.map((c) => c.lineOpen).filter((x) => x > 0));
-  const lineUp = lineR && lineB ? lineR / lineB - 1 : 0;
-  if (recent.length >= 8 && ((lhR >= 0.2 && (lhB === null || lhR - lhB >= 0.1)) || lineUp >= 0.15)) {
+  const lineUp = lineR && lineB ? lineR / lineB - 1 : 0, lineRise = lineR && lineB ? lineR - lineB : 0;
+  // a real rise: at least 100 kPa and 25 %. Low-pressure gathering lines swing by 20–50 kPa every day.
+  if (recent.length >= 8 && ((lhR >= 0.2 && (lhB === null || lhR - lhB >= 0.1)) || (lineUp >= 0.25 && lineRise >= 100))) {
     add({ id: 'line-high', title: 'Line pressure higher',
-      detail: `${lineR && lineB ? `Line pressure at open is ${Math.round(lineR)} kPa over the last 48 h, against ${Math.round(lineB)} kPa before (${lineUp >= 0 ? '+' : ''}${pct(lineUp)} %). ` : ''}${pct(lhR)} % of cycles ended on line pressure high${lhB !== null ? ` (was ${pct(lhB)} %)` : ''}.`,
+      detail: `${lineR && lineB ? `Line pressure at open is ${Math.round(lineR)} kPa over the last 48 h, against ${Math.round(lineB)} kPa before (+${Math.round(lineRise)} kPa). ` : ''}${lhR > 0 || lhB ? `${pct(lhR)} % of cycles ended on line pressure high${lhB !== null ? ` (was ${pct(lhB)} %)` : ''}.` : ''}`,
       cause: 'A gathering-system or downstream problem (compressor down, a restriction, a hydrate), not the well itself.',
       action: 'Check the sales line and compressor. Setpoint changes on the well will not fix this.', cycles: evidence(recent.filter((c) => LINE_HIGH.includes(Number(c.end)))) });
+  }
+
+  // 5b. Cycle timing changed (setpoints changed at the well or remotely): report it with its effect, so a gas change
+  // that follows a timer change is read as the result of the change, not as a well problem.
+  if (recent.length >= 6 && base.length >= 30) {
+    const sh = [median(base.map((c) => c.shutInMin)), median(recent.map((c) => c.shutInMin))];
+    const fl = [median(base.map((c) => c.flowMin)), median(recent.map((c) => c.flowMin))];
+    const ch = (a) => a[0] > 0 && Math.abs(a[1] / a[0] - 1) >= 0.15 && Math.abs(a[1] - a[0]) >= 5;
+    const spChanged = recent.some((c) => c.sp) && JSON.stringify(recent[recent.length - 1].sp || {}) !== JSON.stringify((base[base.length - 1] || {}).sp || {});
+    if (ch(sh) || ch(fl) || spChanged) {
+      const gpc = (l) => { const g = l.filter((c) => c.gas !== undefined); return g.length ? g.reduce((x, c) => x + c.gas, 0) / g.length : null; };
+      const gR = gasPerDay(recent, ref - 2 * D, ref), gB = gasPerDay(base, base[0].openTs, ref - 2 * D), cR = gpc(recent), cB = gpc(base);
+      const parts = [ch(sh) ? `shut-in ${r1(sh[0])} → ${r1(sh[1])} min` : null, ch(fl) ? `flow ${r1(fl[0])} → ${r1(fl[1])} min` : null].filter(Boolean);
+      add({ id: 'timing', severity: 'info', title: 'Cycle timing changed',
+        detail: `${parts.length ? parts.join(', ') : 'Setpoints changed'} (median, last 48 h against the 14 days before).${gR !== null && gB > 0 ? ` Gas ${r1(gB)} → ${r1(gR)} E3m3/d (${gR >= gB ? '+' : ''}${pct(gR / gB - 1)} %)${cB ? `, ${cB.toFixed(2)} → ${cR.toFixed(2)} E3m3 per cycle` : ''}.` : ''}`,
+        cause: 'A setpoint change at the well or from the dashboard, or the optimizer adjusting its own timing.',
+        action: gR !== null && gB > 0 && gR < gB * 0.9 ? 'Gas is lower since the change: consider going back, or give it a few more days to settle.' : 'Keep watching for a few days before judging the change.' });
+    }
   }
 
   // 6. Production down against the well's own baseline (gas per day)
   if (recent.length >= 8 && base.length >= 40) {
     const gR = gasPerDay(recent, ref - 2 * D, ref), gB = gasPerDay(base, base[0].openTs, ref - 2 * D);
-    if (gR !== null && gB > 0 && gR < gB * 0.85) {
-      const causes = out.filter((f) => ['loading', 'casing-build', 'line-high', 'creep', 'slow', 'fast'].includes(f.id)).map((f) => f.title.toLowerCase());
+    if (gR !== null && gB > 0 && gR < gB * 0.75) {
+      const causes = out.filter((f) => ['loading', 'casing-build', 'line-high', 'creep', 'slow', 'fast', 'timing', 'no-cycles'].includes(f.id)).map((f) => f.title.toLowerCase());
       add({ id: 'gas-down', severity: gR < gB * 0.7 ? 'alarm' : 'warn', title: `Gas down ${pct(1 - gR / gB)} %`,
         detail: `${r1(gR)} E3m3/d over the last 48 h, against ${r1(gB)} E3m3/d over the 14 days before. Cycles per day: ${r1(recent.length / 2)} now, ${r1(base.length / Math.max(1, span(base)))} before.`,
         cause: causes.length ? `Likely tied to the other findings: ${causes.join(', ')}.` : 'No other finding explains it: check the flow measurement and the well\'s decline.',
@@ -138,9 +157,13 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
 
   // Weak arrivals are often a symptom: point at the cause when one was found
   const root = out.find((f) => f.id === 'casing-build' || f.id === 'line-high');
+  const lineF = out.find((f) => f.id === 'line-high');
+  const loadF = out.find((f) => f.id === 'loading');
+  for (const f of out) if (f.id === 'timing' && loadF && !lineF) { f.cause = 'Probably a result of "late and failed arrivals rising" (see that finding): failed cycles flow briefly. Otherwise a setpoint change.'; f.action = 'Deal with the arrivals first.'; }
+  for (const f of out) if (f.id === 'timing' && lineF) { f.cause = 'Probably a result of "line pressure higher" (see that finding): the valve stays shut or closes early. Otherwise a setpoint change.'; f.action = 'Check the line first; judge the timing once the line is back to normal.'; }
   for (const f of out) if (root && (f.id === 'loading' || f.id === 'slow')) f.cause = `Probably a result of "${root.title.toLowerCase()}" (see that finding): less pressure to lift the plunger. Otherwise: ${f.cause.charAt(0).toLowerCase() + f.cause.slice(1)}`;
   // Most severe first; at the same severity, causes before their effects
-  const sev = { alarm: 0, warn: 1, info: 2 }, order = ['no-cycles', 'casing-build', 'line-high', 'creep', 'fast', 'slow', 'loading', 'gas-down'];
+  const sev = { alarm: 0, warn: 1, info: 2 }, order = ['no-cycles', 'casing-build', 'line-high', 'timing', 'creep', 'fast', 'slow', 'loading', 'gas-down'];
   out.sort((a, b) => sev[a.severity] - sev[b.severity] || order.indexOf(a.id) - order.indexOf(b.id));
   return { asOf: ref, recentCycles: recent.length, status: out.length ? out[0].severity : 'ok', findings: out };
 }

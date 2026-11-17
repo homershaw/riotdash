@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.0
+- **Raw well history to cycles:** `tools/hist-to-cycles.js` turns historian exports (time, tag, value) into cycle records for import, finding each cycle from the valve and flow. See [Raw history](docs/cycles.md#raw-history-time-tag-value).
+- **Advisor replay:** `tools/advisor-replay.js` shows what the Advisor would have flagged, day by day, over a well's whole history.
+- **Advisor tuned on 17 months of two real wells:** line pressure must rise 100 kPa and 25 % (daily swings on low-pressure lines were flagged before); gas down needs 25 %. New note **Cycle timing changed** shows a shut-in or flow-time change with gas before and after, and is linked to line pressure or failed arrivals when those explain it.
+
 ## 0.11.0
 - **Page template per model.** On the Riots page, **Use as template** saves a controller's page as the layout for its model. Controllers of that model approved afterwards get a copy pointed at their own topics, page and name, and **Rebuild page** uses it. It can be applied right away to the other controllers of the model. See [Page template](docs/riots.md#page-template-the-same-layout-for-every-controller-of-a-model).
 
