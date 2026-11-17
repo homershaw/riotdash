@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.0
+- **Page template per model.** On the Riots page, **Use as template** saves a controller's page as the layout for its model. Controllers of that model approved afterwards get a copy pointed at their own topics, page and name, and **Rebuild page** uses it. It can be applied right away to the other controllers of the model. See [Page template](docs/riots.md#page-template-the-same-layout-for-every-controller-of-a-model).
+
 ## 0.10.1
 Fixes from the C56E mode tests (Dash Issue 1-1):
 - **Pre-flow** shows correctly on the Plunger lift panel: a **PRE-FLOW** banner and the Pre-flow on timer (SPT3.6 against SPT1.15) while the valve is open, then SHUT IN with the Pre-flow off timer (SPT3.7 against SPT1.16). Before, the panel showed the idle Time On or Time Off timer.

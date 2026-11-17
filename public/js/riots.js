@@ -45,13 +45,17 @@ function render() {
       h('button', { class: 'btn', type: 'button', onclick: () => rename(d) }, 'Rename'), ' ',
       h('button', { class: 'btn', type: 'button', onclick: () => editLabels(d) }, 'Labels'), ' ',
       h('button', { class: 'btn', type: 'button', onclick: () => rebuild(d) }, 'Rebuild page'), ' ',
+      d.model ? h('button', { class: 'btn', type: 'button', title: `Use this page's layout for every ${d.model}`, onclick: () => useTemplate(d) }, data.profiles[d.model]?.template?.from === d.id ? 'Update template' : 'Use as template') : null, ' ',
       h('button', { class: 'btn danger', type: 'button', onclick: () => remove(d) }, 'Remove')))) : [h('tr', {}, h('td', { colspan: 6, class: 'empty' }, 'No approved controllers yet.'))]));
 
   // Profiles (one per model seen)
   const models = [...new Set(data.devices.filter((d) => d.model && d.tags.length).map((d) => d.model))];
   $('#profiles').replaceChildren(...(models.length ? models.map((m) => {
     const n = Object.keys(data.profiles[m]?.labels || {}).length, used = data.devices.filter((d) => d.model === m && d.state === 'approved').length;
-    return h('div', { class: 'prof' }, h('b', {}, m), h('span', {}, `${n} friendly name${n === 1 ? '' : 's'} · used by ${used} approved controller${used === 1 ? '' : 's'}`),
+    const tpl = data.profiles[m]?.template;
+    return h('div', { class: 'prof' }, h('b', {}, m), h('span', {}, `${n} friendly name${n === 1 ? '' : 's'} · used by ${used} approved controller${used === 1 ? '' : 's'} · `,
+        tpl ? h('span', { class: 'tpl-on' }, `page template: ${tpl.fromName} (${tpl.from}), saved ${ago(tpl.at)}`) : 'page: built automatically'),
+      tpl ? h('button', { class: 'btn', type: 'button', onclick: () => dropTemplate(m) }, 'Stop using template') : null,
       h('button', { class: 'btn primary', type: 'button', onclick: () => editProfile(m) }, 'Edit names'));
   }) : [h('div', { class: 'empty' }, 'Profiles appear once a controller has sent its description.')]));
 
@@ -89,6 +93,22 @@ function pendingCard(d) {
       h('button', { class: 'btn primary', type: 'button', onclick: () => approve(d, nameIn.value) }, 'Approve'),
       h('button', { class: 'btn danger', type: 'button', onclick: () => reject(d) }, 'Reject'),
       h('a', { class: 'btn', href: `/explorer#t=${encodeURIComponent(`${data.prefix}/${d.id}/info`)}` }, 'Inspect')));
+}
+
+async function useTemplate(d) {
+  const others = data.devices.filter((x) => x.state === 'approved' && x.model === d.model && x.id !== d.id);
+  if (!confirm(`Use the page of ${d.name} (${d.id}) as the layout for every ${d.model}?\n\nControllers of this model approved from now on get a copy of it, pointed at their own data. "Rebuild page" uses it too.`)) return;
+  const apply = others.length > 0 && confirm(`Also apply it now to the other ${others.length} ${d.model} controller${others.length > 1 ? 's' : ''} (${others.map((x) => x.name).join(', ')})?\n\nThis replaces their pages, including any changes made to them.`);
+  try {
+    const r = await api(`/api/riots/${encodeURIComponent(d.id)}/template`, { method: 'POST', body: { apply } });
+    toast(`Template saved for ${d.model}${apply ? ` · ${r.rebuilt} page${r.rebuilt === 1 ? '' : 's'} rebuilt` : ''}`);
+    load();
+  } catch (e) { toast('Could not save the template: ' + e.message, 'error'); }
+}
+
+async function dropTemplate(m) {
+  if (!confirm(`Stop using the page template for ${m}? New controllers get the automatically built page again. Existing pages are not changed.`)) return;
+  try { await api(`/api/riot-profiles/${encodeURIComponent(m)}/template`, { method: 'DELETE' }); toast('Template removed'); load(); } catch (e) { toast(e.message, 'error'); }
 }
 
 async function approve(d, name) {

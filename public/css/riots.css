@@ -32,3 +32,4 @@ body.riots-page { display: block; overflow: auto; }
 .ld-body input { padding: 4px 7px; }
 .ld .chk small { color: var(--muted); }
 @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } .rp { padding: 10px; } .tbl th:nth-child(3), .tbl td:nth-child(3) { display: none; } }
+.tpl-on { color: var(--accent2); }

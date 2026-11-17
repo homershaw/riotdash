@@ -249,6 +249,19 @@ function wsMqtt(headers, username, password) {
   ok(p1.activeTimer && p1.activeTimer.label === 'Pre-flow on' && p1.activeTimer.elapsed === 1.5 && p1.activeTimer.sp === 2
     && p2.activeTimer.label === 'Pre-flow off' && p2.activeTimer.elapsed === 2 && p3.activeTimer === null,
     'pre-flow on / off show their own timer (1.5 of 2, 2 of 3); time on cycle falls back to time on');
+  // Page template: AB13's edited page becomes the layout for its model; a newly approved controller gets a copy with its own topics
+  const putJ = (u, b) => fetch(`http://127.0.0.1:${HTTP}${u}`, { method: 'PUT', body: JSON.stringify(b) });
+  await putJ('/api/dashboards/riot-ab13', { name: 'Well 13', settings: { grid: 10, width: 1000, height: 600 }, widgets: [
+    { id: 'w1', type: 'label', x: 10, y: 10, w: 300, h: 40, props: { text: 'Well 13' } },
+    { id: 'w2', type: 'value', x: 10, y: 60, w: 200, h: 100, props: { label: 'Casing', topic: 'riot/AB13/tag/M31.AI1', link: 'riot-ab13' } },
+    { id: 'w3', type: 'plunger', x: 10, y: 170, w: 900, h: 400, props: { topic: 'riot/AB13/opt7/1' } }] });
+  const tpl = await (await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB13/template`, { method: 'POST', body: '{}' })).json();
+  a.s.write(C.encodePublish({ topic: 'riot/AB15/info', payload: JSON.stringify({ ...info, clientId: 'RiotP4-1C2904FFAB15' }), retain: true })); await sleep(300);
+  await fetch(`http://127.0.0.1:${HTTP}/api/riots/AB15/approve`, { method: 'POST', body: JSON.stringify({ name: 'Well 15' }) });
+  const pg15 = await (await get('/api/dashboards/riot-ab15')).json();
+  const wp = Object.fromEntries(pg15.widgets.map((x) => [x.id, x.props]));
+  ok(tpl.ok && pg15.widgets.length === 3 && wp.w1.text === "Well 15" && wp.w2.topic === "riot/AB15/tag/M31.AI1" && wp.w2.link === "riot-ab15" && wp.w3.topic === 'riot/AB15/opt7/1' && !JSON.stringify(pg15.widgets).includes('AB13') && pg15.settings.generated.template === 'AB13',
+    'approving a controller copies the model template, pointed at its own topics, page and name');
   const info2 = { ...info, clientId: 'RiotP4-AABBCCDDAB12' };
   a.s.write(C.encodePublish({ topic: 'riot/AB12/info', payload: JSON.stringify(info2), retain: true }));
   await sleep(200);
