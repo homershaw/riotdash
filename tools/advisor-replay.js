@@ -37,7 +37,7 @@ for (const [well, recs] of Object.entries(groups)) {
   const open = new Map(), count = {};
   let i = 0;
   const t0 = recs[0].openTs + 16 * 86400, t1 = recs[recs.length - 1].openTs;
-  for (let t = t0; t <= t1 + 86400; t += 86400) {
+  for (let t = t0; t <= t1; t += 86400) {
     while (i < recs.length && recs[i].openTs <= t) i++;
     const e = evaluate(recs.slice(0, i), { now: t });
     const cur = new Map(e.findings.map((f) => [f.id, f]));

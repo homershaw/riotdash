@@ -2,7 +2,7 @@
 // Advisor: plain checks on a well's plunger cycle records (server/cycles.js). No AI: each finding says what it saw,
 // with numbers, the cycles behind it, the likely cause and what to consider. It never changes anything.
 //
-// "Now" is the newest record, so imported history is judged as of its own last day. Recent = the last 48 h;
+// "Now" is the newest record, so imported history is judged as of its own last day. Recent = the last 48 h (or last 10 cycles);
 // baseline = the 14 days before that.
 
 const H = 3600, D = 86400;
@@ -34,15 +34,26 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
   const out = [];
   if (!records.length) return { asOf: null, findings: out, status: 'none' };
   const ref = records[records.length - 1].endTs || records[records.length - 1].openTs;
-  const recent = records.filter((c) => c.openTs > ref - 2 * D);
-  const base = records.filter((c) => c.openTs <= ref - 2 * D && c.openTs > ref - 16 * D);
+  // Recent = the last 48 h, or the last 10 cycles for a slow-cycling well. Baseline = the 14 days before that,
+  // or at least the 30 cycles before it.
+  let ri = records.findIndex((c) => c.openTs > ref - 2 * D); if (ri < 0) ri = records.length;
+  ri = Math.min(ri, Math.max(0, records.length - 10));
+  const recent = records.slice(ri), rStart = recent.length ? recent[0].openTs : ref;
+  let bi = records.findIndex((c) => c.openTs > rStart - 14 * D); if (bi < 0 || bi > ri) bi = ri;
+  bi = Math.min(bi, Math.max(0, ri - 30));
+  const base = records.slice(bi, ri);
+  // gas periods run from the close before each window, so each window holds whole cycles
+  const rFrom = ri > 0 ? (records[ri - 1].endTs || rStart) : rStart, bFrom = bi > 0 ? (records[bi - 1].endTs || (base[0] || {}).openTs) : (base[0] || {}).openTs;
+  const win = (ref - rStart) / H > 50 ? `last ${recent.length} cycles` : 'last 48 h';
+  const spacingH = median(records.slice(Math.max(1, records.length - 40)).map((c, i, a) => (i ? c.openTs - a[i - 1].openTs : null)).filter((x) => x > 0)) / H || 3;
   const span = (l) => (l.length ? (l[l.length - 1].openTs - l[0].openTs) / D : 0);
   const add = (f) => out.push({ severity: 'warn', ...f });
   const evidence = (list) => list.slice(-30).map((c) => c.openTs);
 
   // 0. No cycles lately (only for a well that is still reporting, i.e. its newest record is under a week old)
-  if (now - ref < 7 * D && now - ref > 6 * H && records.length > 20) {
-    add({ id: 'no-cycles', severity: 'alarm', title: 'No cycles recorded', detail: `The last cycle ended ${r1((now - ref) / H)} h ago. The well cycled ${r1(records.filter((c) => c.openTs > ref - D).length)} times in its last day of data.`,
+  const overdue = Math.max(6, 2.5 * spacingH);
+  if (now - ref < 7 * D && now - ref > overdue * H && records.length > 20) {
+    add({ id: 'no-cycles', severity: 'alarm', title: 'No cycles recorded', detail: `The last cycle ended ${r1((now - ref) / H)} h ago; this well normally cycles every ${r1(spacingH)} h.`,
       cause: 'Optimizer stopped, an ESD, a valve or communication problem, or the well loaded up and stays shut in.', action: 'Check the controller and the well.' });
   }
 
@@ -52,13 +63,24 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
   if (target && vRecent.length >= 8) {
     const v = median(vRecent), off = v / target - 1;
     if (off > 0.25) add({ id: 'fast', severity: off > 0.5 ? 'alarm' : 'warn', title: 'Plunger arriving too fast',
-      detail: `Median velocity over the last 48 h is ${Math.round(v)} m/min, ${pct(off)} % above the ${Math.round(target)} m/min target (${vRecent.length} arrivals).`,
+      detail: `Median velocity over the ${win} is ${Math.round(v)} m/min, ${pct(off)} % above the ${Math.round(target)} m/min target (${vRecent.length} arrivals).`,
       cause: 'Shut-in longer than needed builds too much casing pressure; fast arrivals wear the plunger and lubricator.',
       action: 'Consider shortening the shut-in (lower Time Off or Min Shut-in) or lowering the load factor setpoint, in small steps.', cycles: evidence(recent.filter((c) => c.velocity > 0)) });
     else if (off < -0.25) add({ id: 'slow', title: 'Plunger arriving slowly',
-      detail: `Median velocity over the last 48 h is ${Math.round(v)} m/min, ${pct(-off)} % below the ${Math.round(target)} m/min target (${vRecent.length} arrivals).`,
+      detail: `Median velocity over the ${win} is ${Math.round(v)} m/min, ${pct(-off)} % below the ${Math.round(target)} m/min target (${vRecent.length} arrivals).`,
       cause: 'Not enough casing pressure for the liquid load: shut-in too short, or more liquid coming in.',
       action: 'Consider a longer shut-in (raise Time Off or Min Shut-in) or a higher load factor setpoint.', cycles: evidence(recent.filter((c) => c.velocity > 0)) });
+  }
+
+  // 1b. No target velocity: compare with the well's own baseline
+  const vBase = base.filter((c) => c.velocity > 0).map((c) => c.velocity);
+  if (!target && vRecent.length >= 5 && vBase.length >= 15) {
+    const v = median(vRecent), b = median(vBase), ch = v / b - 1;
+    const ev = evidence(recent.filter((c) => c.velocity > 0));
+    if (ch <= -0.25) add({ id: 'slow', title: 'Plunger slowing down', detail: `Median velocity is ${Math.round(v)} m/min over the ${win}, against ${Math.round(b)} m/min before (${pct(ch)} %, ${vRecent.length} arrivals). No target velocity is set, so this compares the well with itself.`,
+      cause: 'More liquid in the well, or not enough casing pressure at open. Often the first sign of loading.', action: 'Consider a longer shut-in or a higher load factor setpoint, and watch for failed arrivals. Set a target velocity to judge against it.', cycles: ev });
+    else if (ch >= 0.35) add({ id: 'fast', title: 'Plunger arriving faster', detail: `Median velocity is ${Math.round(v)} m/min over the ${win}, against ${Math.round(b)} m/min before (+${pct(ch)} %, ${vRecent.length} arrivals). No target velocity is set, so this compares the well with itself.`,
+      cause: 'A setpoint change, less liquid, or a worn plunger. Fast arrivals wear the plunger and lubricator.', action: 'If nothing was changed at the well, inspect the plunger. Set a target velocity to judge against it.', cycles: ev });
   }
 
   // 2. Velocity creeping up over 7 days with the same setpoints → worn plunger or pad
@@ -80,13 +102,14 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
 
   // 3. Arrivals getting worse → liquid loading
   const jr = recent.filter(judged), jb = base.filter(judged);
-  if (jr.length >= 10) {
+  if (jr.length >= Math.min(10, recent.length) && jr.length >= 5) {
     const badR = jr.filter((c) => c.arrival === 'late' || c.arrival === 'failed').length / jr.length;
     const failR = jr.filter((c) => c.arrival === 'failed').length / jr.length;
     const badB = jb.length >= 20 ? jb.filter((c) => c.arrival === 'late' || c.arrival === 'failed').length / jb.length : null;
-    if (failR >= 0.1 || (badB !== null && badR - badB >= 0.15 && badR >= 0.25)) {
+    const badB2 = jb.length >= 15 ? badB ?? jb.filter((c) => c.arrival === 'late' || c.arrival === 'failed').length / jb.length : badB;
+    if ((failR >= 0.1 && jr.filter((c) => c.arrival === 'failed').length >= 2) || (badB2 !== null && badR - badB2 >= 0.15 && badR >= 0.25)) {
       add({ id: 'loading', severity: failR >= 0.2 ? 'alarm' : 'warn', title: 'Late and failed arrivals rising',
-        detail: `In the last 48 h ${pct(badR)} % of cycles were late or failed (${pct(failR)} % failed)${badB !== null ? `, against ${pct(badB)} % in the 14 days before` : ''}.`,
+        detail: `In the ${win} ${pct(badR)} % of cycles were late or failed (${pct(failR)} % failed)${badB2 !== null ? `, against ${pct(badB2)} % before` : ''}.`,
         cause: 'Liquid loading: more liquid than the plunger can lift with the current shut-in and casing pressure.',
         action: 'Consider a longer shut-in or a higher load factor setpoint. If it continues, check for a stuck or worn plunger and for a change in water production.',
         cycles: evidence(jr.filter((c) => c.arrival === 'late' || c.arrival === 'failed')) });
@@ -103,13 +126,24 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
     return out2;
   };
   const bAll = build(records.filter((c) => c.openTs > ref - 16 * D));
-  const bR = bAll.filter((x) => x.c.openTs > ref - 2 * D), bB = bAll.filter((x) => x.c.openTs <= ref - 2 * D);
-  if (bR.length >= 8 && bB.length >= 20) {
+  const bR = bAll.filter((x) => x.c.openTs >= rStart), bB = bAll.filter((x) => x.c.openTs < rStart);
+  const longShut = median(records.slice(-20).map((c) => c.shutInMin)) > 240;
+  if (!longShut && bR.length >= 5 && bB.length >= 15) {
     const now2 = median(bR.map((x) => x.rate)), was = median(bB.map((x) => x.rate));
     if (was > 0 && now2 < was * 0.7) add({ id: 'casing-build', title: 'Casing pressure building slower',
-      detail: `During shut-in, casing builds ${r1(now2)} kPa/min over the last 48 h, against ${r1(was)} kPa/min in the 14 days before (${pct(1 - now2 / was)} % slower).`,
+      detail: `During shut-in, casing builds ${r1(now2)} kPa/min over the ${win}, against ${r1(was)} kPa/min before (${pct(1 - now2 / was)} % slower).`,
       cause: 'Gas escaping from the casing: a tubing leak, a packer problem, or the casing valve left open to sales. Less often, lower reservoir inflow.',
       action: 'Check the casing valve position and look for a tubing leak (casing and tubing pressures tracking each other while shut in).', cycles: evidence(bR.map((x) => x.c)) });
+  }
+
+  // 4b. Long shut-ins (hours): casing levels off, so compare the casing reached at open, at a similar shut-in
+  if (longShut && recent.length >= 5 && base.length >= 15) {
+    const cR = median(recent.map((c) => c.casingOpen).filter((x) => x > 0)), cB = median(base.map((c) => c.casingOpen).filter((x) => x > 0));
+    const sR = median(recent.map((c) => c.shutInMin)), sB = median(base.map((c) => c.shutInMin));
+    if (cR && cB && cR < cB * 0.9 && cB - cR >= 150 && sR >= sB * 0.9) add({ id: 'casing-build', title: 'Casing not building as high',
+      detail: `Casing at open is ${Math.round(cR)} kPa over the ${win}, against ${Math.round(cB)} kPa before (−${Math.round(cB - cR)} kPa), with a similar shut-in (${Math.round(sR)} against ${Math.round(sB)} min).`,
+      cause: 'Gas escaping from the casing (tubing or packer leak, casing valve open to sales), or lower reservoir pressure or inflow.',
+      action: 'Check the casing valve position and look for a tubing leak. If it continues, compare with the well\'s decline.', cycles: evidence(recent) });
   }
 
   // 5. Line pressure high
@@ -120,7 +154,7 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
   // a real rise: at least 100 kPa and 25 %. Low-pressure gathering lines swing by 20–50 kPa every day.
   if (recent.length >= 8 && ((lhR >= 0.2 && (lhB === null || lhR - lhB >= 0.1)) || (lineUp >= 0.25 && lineRise >= 100))) {
     add({ id: 'line-high', title: 'Line pressure higher',
-      detail: `${lineR && lineB ? `Line pressure at open is ${Math.round(lineR)} kPa over the last 48 h, against ${Math.round(lineB)} kPa before (+${Math.round(lineRise)} kPa). ` : ''}${lhR > 0 || lhB ? `${pct(lhR)} % of cycles ended on line pressure high${lhB !== null ? ` (was ${pct(lhB)} %)` : ''}.` : ''}`,
+      detail: `${lineR && lineB ? `Line pressure at open is ${Math.round(lineR)} kPa over the ${win}, against ${Math.round(lineB)} kPa before (+${Math.round(lineRise)} kPa). ` : ''}${lhR > 0 || lhB ? `${pct(lhR)} % of cycles ended on line pressure high${lhB !== null ? ` (was ${pct(lhB)} %)` : ''}.` : ''}`,
       cause: 'A gathering-system or downstream problem (compressor down, a restriction, a hydrate), not the well itself.',
       action: 'Check the sales line and compressor. Setpoint changes on the well will not fix this.', cycles: evidence(recent.filter((c) => LINE_HIGH.includes(Number(c.end)))) });
   }
@@ -134,10 +168,10 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
     const spChanged = recent.some((c) => c.sp) && JSON.stringify(recent[recent.length - 1].sp || {}) !== JSON.stringify((base[base.length - 1] || {}).sp || {});
     if (ch(sh) || ch(fl) || spChanged) {
       const gpc = (l) => { const g = l.filter((c) => c.gas !== undefined); return g.length ? g.reduce((x, c) => x + c.gas, 0) / g.length : null; };
-      const gR = gasPerDay(recent, ref - 2 * D, ref), gB = gasPerDay(base, base[0].openTs, ref - 2 * D), cR = gpc(recent), cB = gpc(base);
+      const gR = gasPerDay(recent, rFrom, ref), gB = gasPerDay(base, bFrom, rFrom), cR = gpc(recent), cB = gpc(base);
       const parts = [ch(sh) ? `shut-in ${r1(sh[0])} → ${r1(sh[1])} min` : null, ch(fl) ? `flow ${r1(fl[0])} → ${r1(fl[1])} min` : null].filter(Boolean);
       add({ id: 'timing', severity: 'info', title: 'Cycle timing changed',
-        detail: `${parts.length ? parts.join(', ') : 'Setpoints changed'} (median, last 48 h against the 14 days before).${gR !== null && gB > 0 ? ` Gas ${r1(gB)} → ${r1(gR)} E3m3/d (${gR >= gB ? '+' : ''}${pct(gR / gB - 1)} %)${cB ? `, ${cB.toFixed(2)} → ${cR.toFixed(2)} E3m3 per cycle` : ''}.` : ''}`,
+        detail: `${parts.length ? parts.join(', ') : 'Setpoints changed'} (median, ${win} against before).${gR !== null && gB > 0 ? ` Gas ${r1(gB)} → ${r1(gR)} E3m3/d (${gR >= gB ? '+' : ''}${pct(gR / gB - 1)} %)${cB ? `, ${cB.toFixed(2)} → ${cR.toFixed(2)} E3m3 per cycle` : ''}.` : ''}`,
         cause: 'A setpoint change at the well or from the dashboard, or the optimizer adjusting its own timing.',
         action: gR !== null && gB > 0 && gR < gB * 0.9 ? 'Gas is lower since the change: consider going back, or give it a few more days to settle.' : 'Keep watching for a few days before judging the change.' });
     }
@@ -145,11 +179,11 @@ function evaluate(records, { now = Date.now() / 1000 } = {}) {
 
   // 6. Production down against the well's own baseline (gas per day)
   if (recent.length >= 8 && base.length >= 40) {
-    const gR = gasPerDay(recent, ref - 2 * D, ref), gB = gasPerDay(base, base[0].openTs, ref - 2 * D);
+    const gR = gasPerDay(recent, rFrom, ref), gB = gasPerDay(base, bFrom, rFrom);
     if (gR !== null && gB > 0 && gR < gB * 0.75) {
       const causes = out.filter((f) => ['loading', 'casing-build', 'line-high', 'creep', 'slow', 'fast', 'timing', 'no-cycles'].includes(f.id)).map((f) => f.title.toLowerCase());
       add({ id: 'gas-down', severity: gR < gB * 0.7 ? 'alarm' : 'warn', title: `Gas down ${pct(1 - gR / gB)} %`,
-        detail: `${r1(gR)} E3m3/d over the last 48 h, against ${r1(gB)} E3m3/d over the 14 days before. Cycles per day: ${r1(recent.length / 2)} now, ${r1(base.length / Math.max(1, span(base)))} before.`,
+        detail: `${r1(gR)} E3m3/d over the ${win}, against ${r1(gB)} E3m3/d before. Cycles per day: ${r1(recent.length / Math.max(1 / 24, (ref - rFrom) / D))} now, ${r1(base.length / Math.max(1, span(base)))} before.`,
         cause: causes.length ? `Likely tied to the other findings: ${causes.join(', ')}.` : 'No other finding explains it: check the flow measurement and the well\'s decline.',
         action: causes.length ? 'Deal with the findings above first.' : 'Compare with the meter and the well\'s expected decline.' });
     }

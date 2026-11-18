@@ -13,16 +13,18 @@ The **Cycles** page shows, per well and for 7 days to a year:
 
 ![Advisor](img/advisor.png)
 
-The Advisor runs plain checks on each well's cycles: the last 48 hours against the 14 days before, as of the well's newest record (so imported history is judged as of its own last day). It only reports; it never changes a setpoint. Each finding gives the numbers it saw, the likely cause, what to consider, and a button that highlights the cycles behind it. The dot beside each well in the list shows its worst finding.
+The Advisor runs plain checks on each well's cycles: the last 48 hours (or the last 10 cycles, for a well that cycles only a few times a day) against the 14 days before (at least 30 cycles), as of the well's newest record (so imported history is judged as of its own last day). It only reports; it never changes a setpoint. Each finding gives the numbers it saw, the likely cause, what to consider, and a button that highlights the cycles behind it. The dot beside each well in the list shows its worst finding.
 
 | Finding | When | Likely cause |
 |---|---|---|
-| No cycles recorded | a reporting well has had no cycle for over 6 h | optimizer stopped, ESD, valve or communication problem |
-| Casing pressure building slower | casing build rate during shut-in down 30 % or more | tubing or packer leak, casing valve open to sales |
+| No cycles recorded | no cycle for 2.5 times the well's usual spacing (at least 6 h) | optimizer stopped, ESD, valve or communication problem |
+| Casing pressure building slower | casing build rate during shut-in down 30 % or more (shut-ins under 4 h) | tubing or packer leak, casing valve open to sales |
+| Casing not building as high | casing at open down 10 % and 150 kPa at a similar shut-in (shut-ins over 4 h, where casing levels off) | as above, or lower reservoir pressure |
 | Line pressure higher | line pressure at open up 100 kPa and 25 % or more, or 20 %+ of cycles ending on line pressure high | gathering system or compressor, not the well |
 | Velocity creeping up | velocity rising over 2.5 %/day for 7 days, with setpoints, shut-in and line pressure steady | worn plunger or pad |
 | Plunger arriving too fast / slowly | median velocity more than 25 % off the target (SPT2.12) | shut-in too long / too short, or more liquid |
-| Late and failed arrivals rising | 10 %+ failed, or late + failed up 15 points to 25 %+ | liquid loading |
+| Plunger slowing down / arriving faster | no target set: median velocity 25 % lower / 35 % higher than the well's own baseline | more liquid (early loading) / a change at the well or a worn plunger |
+| Late and failed arrivals rising | 10 %+ failed (at least 2), or late + failed up 15 points to 25 %+ | liquid loading |
 | Cycle timing changed (note) | median shut-in or flow time changed 15 % and 5 min or more, or setpoints changed | a setpoint change; shown with gas before and after so you can judge it |
 | Gas down | gas per day 25 % or more below the 14-day baseline | the other findings, or decline or measurement |
 
@@ -97,6 +99,19 @@ To see what the Advisor would have said over a well's whole history, day by day:
 node tools/advisor-replay.js "Well 1" --tz -07:00
 node tools/advisor-replay.js --csv well1-cycles.csv
 ```
+
+## RTU exports: plunger log and current values
+
+Some RTUs export a plunger log (one row per arrival: `Time, Plunger Time (Min), WellDepth, Plunger Velocity (M/mins)`, with -1 for no arrival) and a file of current values (`Time, Casing Press (kPa), Line Press (kPa), Flow Rate, Flow Today, …`). `tools/plunger-log-to-cycles.js` combines the two:
+
+```
+node tools/plunger-log-to-cycles.js --plunger plunger.csv --current current.csv --well "08-33-052-21W5M" --tz -07:00 --out cycles.csv
+node server/index.js import-cycles cycles.csv
+```
+
+- Each arrival is a cycle that opened at arrival − trip time; a -1 row is a failed cycle. Rows that only repeat the previous trip at an odd time are skipped.
+- Pressures at open are the last sample before the open. Gas is the rise of Flow Today between one open and the next (a drop is taken as the daily reset).
+- `--early` and `--late` (trip minutes) classify arrivals; without them every arrival counts as on time. `--target` (m/min) sets the target velocity so the Advisor can judge fast and slow arrivals; without it the Advisor compares the well with its own recent velocity.
 
 ## Storage and size
 

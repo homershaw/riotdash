@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0
+- **RTU plunger log + current values to cycles:** `tools/plunger-log-to-cycles.js` builds cycle records, with arrivals, trip times and velocity, from an RTU's plunger log and its current-values export. See [RTU exports](docs/cycles.md#rtu-exports-plunger-log-and-current-values).
+- **Advisor works for slow-cycling wells** (tuned on a year of a well cycling 2–4 times a day): the windows use the last 10 cycles when 48 h holds fewer; "No cycles recorded" waits 2.5 times the well's usual spacing; without a target velocity it compares velocity with the well's own baseline (**Plunger slowing down / arriving faster**); for shut-ins of several hours it compares the casing reached at open (**Casing not building as high**) instead of a build rate.
+- Gas per day in findings is measured over whole cycles.
+
 ## 0.12.0
 - **Raw well history to cycles:** `tools/hist-to-cycles.js` turns historian exports (time, tag, value) into cycle records for import, finding each cycle from the valve and flow. See [Raw history](docs/cycles.md#raw-history-time-tag-value).
 - **Advisor replay:** `tools/advisor-replay.js` shows what the Advisor would have flagged, day by day, over a well's whole history.
