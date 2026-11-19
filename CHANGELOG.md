@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.1
+- Fix: imported history showed "No cycles in this period" because the Cycles page counted its 7/30/90 days back from today. A well whose data stopped more than a day ago now opens at its last cycle, and the page shows the date range of its data.
+- New **ending** date on the Cycles page: look at any period of a well's history. The Advisor judges the well as of that date, so you can step back and see what it would have said on any day.
+
 ## 0.13.0
 - **RTU plunger log + current values to cycles:** `tools/plunger-log-to-cycles.js` builds cycle records, with arrivals, trip times and velocity, from an RTU's plunger log and its current-values export. See [RTU exports](docs/cycles.md#rtu-exports-plunger-log-and-current-values).
 - **Advisor works for slow-cycling wells** (tuned on a year of a well cycling 2–4 times a day): the windows use the last 10 cycles when 48 h holds fewer; "No cycles recorded" waits 2.5 times the well's usual spacing; without a target velocity it compares velocity with the well's own baseline (**Plunger slowing down / arriving faster**); for shut-ins of several hours it compares the casing reached at open (**Casing not building as high**) instead of a build rate.

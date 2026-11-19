@@ -358,10 +358,14 @@ async function handleCyclesApi(req, res, parts, url) {
     if (parts[2] && req.method === 'GET') {
       const well = decodeURIComponent(parts[2]), q = url.searchParams;
       const days = Math.min(3650, Number(q.get('days')) || 30), tz = Number(q.get('tz')) || 0;
-      const since = Math.floor(Date.now() / 1000) - days * 86400;
-      const list = cycles.list(well, { since });
+      // The period ends at ?until (epoch s), else now; a well whose data stopped over a day ago (imported history)
+      // is shown up to its last cycle, so its page isn't empty.
+      const all = cycles.list(well), lastTs = all.length ? all[all.length - 1].openTs : 0, nowS = Math.floor(Date.now() / 1000);
+      const until = Number(q.get('until')) || (lastTs && nowS - lastTs > 86400 ? lastTs + 60 : nowS);
+      const since = until - days * 86400;
+      const list = cycles.list(well, { since, until });
       const notes = require('./cycle-sim').SCENARIOS;
-      return json(res, 200, { well, advisor: advisor.evaluate(cycles.list(well)), demo: notes[well] ? notes[well].note : undefined, daily: cycles.daily(well, { days, tzOffsetMin: tz }), cycles: list.slice(-Math.min(2000, Number(q.get('limit')) || 200)).reverse(), total: list.length });
+      return json(res, 200, { well, advisor: advisor.evaluate(all.filter((r) => r.openTs < until), { now: Math.min(until, nowS) }), demo: notes[well] ? notes[well].note : undefined, daily: cycles.daily(well, { days, tzOffsetMin: tz, until }), until, first: all.length ? all[0].openTs : null, last: lastTs || null, cycles: list.slice(-Math.min(2000, Number(q.get('limit')) || 200)).reverse(), total: list.length });
     }
     return json(res, 404, { error: 'not found' });
   } catch (e) { return json(res, 400, { error: e.message }); }

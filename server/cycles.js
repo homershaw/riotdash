@@ -167,10 +167,10 @@ class Cycles {
   }
 
   // One row per day (by UTC offset minutes): cycles, gas, arrivals, averages
-  daily(well, { days = 30, tzOffsetMin = 0, run } = {}) {
-    const since = Math.floor(Date.now() / 1000) - days * 86400;
+  daily(well, { days = 30, tzOffsetMin = 0, run, until = Math.floor(Date.now() / 1000) } = {}) {
+    const since = until - days * 86400;
     const by = new Map();
-    for (const r of this.list(well, { since, run })) {
+    for (const r of this.list(well, { since, until, run })) {
       const day = new Date((r.openTs + tzOffsetMin * 60) * 1000).toISOString().slice(0, 10);
       let d = by.get(day);
       if (!d) by.set(day, d = { day, cycles: 0, gas: 0, gasN: 0, shutIn: 0, flow: 0, vel: [], ontime: 0, early: 0, late: 0, failed: 0, none: 0, lineHigh: 0 });
