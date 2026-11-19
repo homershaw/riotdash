@@ -37,3 +37,4 @@
 .adv-ok { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--ok); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; gap: 8px; }
 .adv-ok span { color: var(--ok); font-weight: 700; }
 .cy-tbl tr.hl td { background: rgba(245,158,11,.14); }
+.adv-card.info { border-left-color: var(--accent); } .adv-card.info .adv-sev { color: var(--accent); } .adv-dot.info { background: var(--accent); }
