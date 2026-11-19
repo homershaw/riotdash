@@ -24,6 +24,7 @@ async function loadWells() {
 }
 
 function pick(well) {
+  if (well !== current) $('#until').value = '';   // each well opens at its own latest data
   current = well;
   history.replaceState(null, '', '?well=' + encodeURIComponent(well));
   document.querySelectorAll('.cy-well').forEach((b) => b.classList.toggle('active', b.querySelector('b').textContent === well));
@@ -34,13 +35,21 @@ function pick(well) {
 async function load() {
   if (!current) return;
   let d;
-  try { d = await api(`/api/cycles/${encodeURIComponent(current)}?days=${$('#days').value}&tz=${tz}&limit=200`); } catch (e) { toast(e.message, 'error'); return; }
+  // ending date: the end of the chosen day (local), or let the server pick (now, or the well's last cycle)
+  const u = $('#until').value ? Math.floor(new Date($('#until').value + 'T23:59:59').getTime() / 1000) : '';
+  try { d = await api(`/api/cycles/${encodeURIComponent(current)}?days=${$('#days').value}&tz=${tz}&limit=200${u ? '&until=' + u : ''}`); } catch (e) { toast(e.message, 'error'); return; }
+  const ymd = (t) => { const x = new Date(t * 1000); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  if (d.until) $('#until').value = ymd(d.until - 1);
+  if (d.first && d.last) { $('#until').min = ymd(d.first); $('#until').max = ymd(Math.max(d.last, Date.now() / 1000)); }
+  const ended = d.last && Date.now() / 1000 - d.last > 86400;
+  $('#range').hidden = !d.first;
+  $('#range').textContent = d.first ? `Data from ${new Date(d.first * 1000).toLocaleDateString()} to ${new Date(d.last * 1000).toLocaleDateString()}${ended ? ' (history, no recent cycles)' : ''}. Pick an ending date to look further back.` : '';
   $('#wellName').textContent = current;
   lastData = d;
   $('#demoNote').hidden = !d.demo; $('#demoNote').textContent = d.demo ? `Demo well (simulated data): ${d.demo}` : '';
   renderAdvisor(d.advisor);
   $('#empty').hidden = !!d.total; $('#content').hidden = !d.total;
-  if (!d.total) { $('#empty').textContent = 'No cycles in this period.'; return; }
+  if (!d.total) { $('#empty').textContent = `No cycles in the ${$('#days').selectedOptions[0].textContent} ending ${$('#until').value}.`; return; }
   const days = d.daily, n = days.length || 1, sum = (k) => days.reduce((a, x) => a + (x[k] || 0), 0);
   const arrived = sum('ontime') + sum('early') + sum('late'), judged = arrived + sum('failed');
   const gasDays = days.filter((x) => x.gas !== null);
@@ -72,7 +81,7 @@ function renderRecent() {
 }
 
 function renderAdvisor(a) {
-  $('#advAsOf').textContent = a && a.asOf ? `as of ${time(a.asOf)} · last 48 h against the 14 days before` : '';
+  $('#advAsOf').textContent = a && a.asOf ? `as of ${time(a.asOf)} · recent cycles against the two weeks before` : '';
   if (!a || !a.findings.length) {
     $('#advisor').replaceChildren(h('div', { class: 'adv-ok' }, h('span', {}, '✓'), a && a.recentCycles ? `Nothing unusual: ${a.recentCycles} cycles in the last 48 h look like the 14 days before.` : 'Not enough recent cycles to judge.'));
     return;
@@ -148,6 +157,7 @@ $('#impGo').addEventListener('click', async () => {
   $('#impGo').disabled = false;
 });
 $('#days').addEventListener('change', load);
+$('#until').addEventListener('change', load);
 $('#demoAdd').addEventListener('click', async () => {
   if (!confirm('Add six demo wells with 30 days of simulated cycles? Each has a known problem for the Advisor to find. They are named "DEMO …" and can be removed again.')) return;
   try { await api('/api/cycles/demo', { method: 'POST' }); current = 'DEMO Healthy'; toast('Demo wells added'); loadWells(); } catch (e) { toast(e.message, 'error'); }

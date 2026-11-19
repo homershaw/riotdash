@@ -38,3 +38,5 @@
 .adv-ok span { color: var(--ok); font-weight: 700; }
 .cy-tbl tr.hl td { background: rgba(245,158,11,.14); }
 .adv-card.info { border-left-color: var(--accent); } .adv-card.info .adv-sev { color: var(--accent); } .adv-dot.info { background: var(--accent); }
+.cy-end { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; } .cy-end input { width: auto; }
+.cy-range { color: var(--muted); font-size: 12.5px; margin: -4px 0 10px; }

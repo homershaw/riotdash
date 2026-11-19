@@ -4,7 +4,7 @@
 
 Every plunger cycle becomes one record: when the valve closed and opened, when (and whether) the plunger arrived, the pressures, the gas produced and the setpoints in effect. riotdash keeps the records per well in `data/cycles/<well>.jsonl`. They are the base for the cycle history now, and for the Advisor and AI tuning that come next.
 
-The **Cycles** page shows, per well and for 7 days to a year:
+The **Cycles** page shows, per well, for 7 days to a year ending today, at the well's last cycle (for imported history), or on an **ending** date you pick:
 - cycles per day, gas per day, on-time and failed arrival rates, average velocity
 - gas per day, and cycles per day split by arrival result (hover a day for its numbers)
 - a table by day and the most recent cycles
@@ -13,7 +13,7 @@ The **Cycles** page shows, per well and for 7 days to a year:
 
 ![Advisor](img/advisor.png)
 
-The Advisor runs plain checks on each well's cycles: the last 48 hours (or the last 10 cycles, for a well that cycles only a few times a day) against the 14 days before (at least 30 cycles), as of the well's newest record (so imported history is judged as of its own last day). It only reports; it never changes a setpoint. Each finding gives the numbers it saw, the likely cause, what to consider, and a button that highlights the cycles behind it. The dot beside each well in the list shows its worst finding.
+The Advisor runs plain checks on each well's cycles: the last 48 hours (or the last 10 cycles, for a well that cycles only a few times a day) against the 14 days before (at least 30 cycles), as of the well's newest record (so imported history is judged as of its own last day). It only reports; it never changes a setpoint. With an ending date picked, it judges the well as of that date. Each finding gives the numbers it saw, the likely cause, what to consider, and a button that highlights the cycles behind it. The dot beside each well in the list shows its worst finding.
 
 | Finding | When | Likely cause |
 |---|---|---|
